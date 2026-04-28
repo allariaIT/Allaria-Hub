@@ -1,0 +1,49 @@
+name: Docker Deployment (Template)
+
+on:
+  push:
+    branches:
+      # Desarrollo → ambiente dev
+      - dev
+      - 'dev-*'
+      - integration
+      
+      # Producción → ambiente prd
+      - main
+      - master
+      - prd
+      - 'prd-*'
+
+      # Staging → ambiente stg
+      - stg
+      - 'stg-*'
+
+      # Testing → ambiente tst
+      - 'tst-*'
+      - tst
+
+  workflow_dispatch:
+
+jobs:
+  full-pipeline:
+    # Llama al workflow reutilizable de la organización
+    uses: allariaIT/docker-deployment/.github/workflows/docker-deployment.yml@prd
+    secrets: inherit # Hereda automáticamente SWR_USER, SWR_PASS y SERVER_PRIV_KEY de la Org
+    with:
+      registry_url: "swr.sa-argentina-1.myhuaweicloud.com"
+      registry_organization: "developers"
+      
+      # Usa el nombre del repositorio actual dinámicamente
+      repo_name: ${{ github.event.repository.name }} 
+      
+      # Configuración de red y salud
+      health_port: ${{ vars.APP_PORT }}
+      health_url: "/"
+      
+      # Inyección de variables al archivo .env
+      # APP_PORT se toma de las variables de la organización o ambiente
+      env_variables: "APP_PORT"
+      
+      # Definición de secretos necesarios para la aplicación
+      # Asegúrate de que estos nombres existan en los Secrets de tu Org o Repo
+      env_secrets: ""

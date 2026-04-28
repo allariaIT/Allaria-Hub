@@ -1,0 +1,40 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Prioridad: Imagen SWR > Nombre Repo > Fallback
+    image: ${IMAGE_NAME:-${REPO_NAME:-node-app-template}}
+    container_name: ${REPO_NAME:-app-container}
+    restart: always
+    
+    # Puerto dinámico para el ELB
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    
+    environment:
+      - REPO_NAME=${REPO_NAME}
+      - APP_PORT=${APP_PORT}
+    
+    # Carga de secretos inyectados por el workflow (VAULTWARDEN_DATABASE_URL, etc)
+    env_file:
+      - .env
+
+    volumes:
+      - sfs_data:/data
+
+    networks:
+      - red-docker
+
+volumes:
+  sfs_data:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=172.30.20.83,rw,nolock,hard,nointr,nfsvers=3,proto=tcp"
+      # El subdirectorio en el SFS se crea con el nombre del repo
+      device: ":/SFS/${REPO_NAME}/"
+
+networks:
+  red-docker:
+    external: true
