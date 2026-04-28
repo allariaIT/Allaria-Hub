@@ -1,11 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { api, setToken, clearToken } from '../lib/api'
 
 const AuthContext = createContext(null)
 
-// ⚠️ Reemplazá esto con tu Client ID de Google Cloud Console
-// Crealo en: https://console.cloud.google.com/apis/credentials
-// Tipo: OAuth 2.0 Client ID > Web application
-// Authorized JavaScript origins: http://localhost:5174 (dev) + tu dominio (prod)
+// ⚠️ Reemplazá con tu Client ID de Google Cloud Console
 const GOOGLE_CLIENT_ID = 'TU_GOOGLE_CLIENT_ID.apps.googleusercontent.com'
 
 export function AuthProvider({ children }) {
@@ -19,17 +17,28 @@ export function AuthProvider({ children }) {
   })
   const [isLoading, setIsLoading] = useState(true)
 
-  const handleCredentialResponse = useCallback((response) => {
-    // Decode JWT token from Google
-    const payload = JSON.parse(atob(response.credential.split('.')[1]))
-    const userData = {
-      id: payload.sub,
-      name: payload.name,
-      email: payload.email,
-      picture: payload.picture,
+  const handleCredentialResponse = useCallback(async (response) => {
+    try {
+      // Verificar token en el backend y crear/actualizar usuario
+      const data = await api.authGoogle(response.credential)
+      const userData = data.user
+      setToken(data.token)
+      localStorage.setItem('allaria_user', JSON.stringify(userData))
+      setUser(userData)
+    } catch (err) {
+      console.error('Auth error:', err)
+      // Fallback: decode locally if backend is down
+      const payload = JSON.parse(atob(response.credential.split('.')[1]))
+      const userData = {
+        id: payload.sub,
+        name: payload.name,
+        email: payload.email,
+        picture: payload.picture,
+      }
+      setToken(response.credential)
+      localStorage.setItem('allaria_user', JSON.stringify(userData))
+      setUser(userData)
     }
-    localStorage.setItem('allaria_user', JSON.stringify(userData))
-    setUser(userData)
   }, [])
 
   useEffect(() => {
@@ -65,6 +74,7 @@ export function AuthProvider({ children }) {
     if (window.google) {
       window.google.accounts.id.disableAutoSelect()
     }
+    clearToken()
     localStorage.removeItem('allaria_user')
     setUser(null)
   }, [])

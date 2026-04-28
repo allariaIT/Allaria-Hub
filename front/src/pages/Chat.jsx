@@ -1,14 +1,12 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Send, Trash2, Sparkles, Bot, User, Copy, Check,
   Plus, MessageSquare, ChevronLeft, ChevronRight, Pencil
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { useAuth } from '../context/AuthContext'
+import { api } from '../lib/api'
 import './Chat.css'
-
-const LITELLM_URL = 'https://litellm.allaria.xyz/v1/chat/completions'
-const LITELLM_KEY = 'sk-eWkdUVfWsfB4YVYHi935aw'
 
 const PROVIDERS = [
   {
@@ -55,56 +53,16 @@ const WELCOME_MSG = {
   content: '¡Hola! Soy el asistente IA de Allaria Hub.\n\n¿En qué puedo ayudarte hoy?\n- Código y arquitectura\n- Análisis de datos\n- Documentación técnica\n- Ideas y brainstorming',
 }
 
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
-}
-
-function getStorageKey(userId) {
-  return `allaria_chats_${userId}`
-}
-
-function loadChats(userId) {
-  try {
-    const raw = localStorage.getItem(getStorageKey(userId))
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-function saveChats(userId, chats) {
-  localStorage.setItem(getStorageKey(userId), JSON.stringify(chats))
-}
-
-function createNewChat() {
-  return {
-    id: generateId(),
-    title: 'Nuevo chat',
-    messages: [WELCOME_MSG],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-}
-
-function inferTitle(messages) {
-  const firstUser = messages.find(m => m.role === 'user')
-  if (!firstUser) return 'Nuevo chat'
-  const text = firstUser.content.slice(0, 50)
-  return text.length < firstUser.content.length ? text + '...' : text
-}
-
 export default function Chat() {
   const { user } = useAuth()
-  const userId = user?.id || 'anonymous'
   const userName = user?.name || 'Vos'
   const userPicture = user?.picture
 
-  // Chats
   const [chats, setChats] = useState([])
   const [activeChatId, setActiveChatId] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [loadingChats, setLoadingChats] = useState(true)
 
-  // Chat state
   const [selectedModel, setSelectedModel] = useState(PROVIDERS[0].models[0].id)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -118,50 +76,62 @@ export default function Chat() {
   const activeChat = chats.find(c => c.id === activeChatId)
   const messages = activeChat?.messages || []
 
-  // Load chats for this Google user
+  // Load chats from backend
   useEffect(() => {
-    const loaded = loadChats(userId)
-    if (loaded.length === 0) {
-      const first = createNewChat()
-      setChats([first])
-      setActiveChatId(first.id)
-      saveChats(userId, [first])
-    } else {
-      setChats(loaded)
-      setActiveChatId(loaded[0].id)
+    let cancelled = false
+    async function load() {
+      try {
+        const data = await api.getChats()
+        if (cancelled) return
+        if (data.length === 0) {
+          const chat = await api.createChat('Nuevo chat')
+          setChats([{ ...chat, messages: [WELCOME_MSG] }])
+          setActiveChatId(chat.id)
+        } else {
+          const withWelcome = data.map(c =>
+            c.messages.length === 0 ? { ...c, messages: [WELCOME_MSG] } : c
+          )
+          setChats(withWelcome)
+          setActiveChatId(withWelcome[0].id)
+        }
+      } catch (err) {
+        console.error('Error loading chats:', err)
+      } finally {
+        if (!cancelled) setLoadingChats(false)
+      }
     }
-  }, [userId])
-
-  const persistChats = useCallback((updated) => {
-    setChats(updated)
-    saveChats(userId, updated)
-  }, [userId])
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Chat management
-  const createChat = () => {
-    const chat = createNewChat()
-    const updated = [chat, ...chats]
-    persistChats(updated)
-    setActiveChatId(chat.id)
+  const createChat = async () => {
+    try {
+      const chat = await api.createChat('Nuevo chat')
+      setChats(prev => [{ ...chat, messages: [WELCOME_MSG] }, ...prev])
+      setActiveChatId(chat.id)
+    } catch (err) {
+      console.error('Error creating chat:', err)
+    }
   }
 
-  const selectChat = (id) => {
-    setActiveChatId(id)
-  }
-
-  const deleteChat = (id) => {
-    const updated = chats.filter(c => c.id !== id)
-    if (updated.length === 0) {
-      const fresh = createNewChat()
-      persistChats([fresh])
-      setActiveChatId(fresh.id)
-    } else {
-      persistChats(updated)
-      if (activeChatId === id) setActiveChatId(updated[0].id)
+  const deleteChat = async (id) => {
+    try {
+      await api.deleteChat(id)
+      const remaining = chats.filter(c => c.id !== id)
+      if (remaining.length === 0) {
+        const chat = await api.createChat('Nuevo chat')
+        setChats([{ ...chat, messages: [WELCOME_MSG] }])
+        setActiveChatId(chat.id)
+      } else {
+        setChats(remaining)
+        if (activeChatId === id) setActiveChatId(remaining[0].id)
+      }
+    } catch (err) {
+      console.error('Error deleting chat:', err)
     }
   }
 
@@ -170,16 +140,19 @@ export default function Chat() {
     setEditTitle(chat.title)
   }
 
-  const saveTitle = () => {
+  const saveTitle = async () => {
     if (!editTitle.trim()) return
-    const updated = chats.map(c =>
-      c.id === editingChatId ? { ...c, title: editTitle.trim() } : c
-    )
-    persistChats(updated)
+    try {
+      await api.updateChat(editingChatId, editTitle.trim())
+      setChats(prev => prev.map(c =>
+        c.id === editingChatId ? { ...c, title: editTitle.trim() } : c
+      ))
+    } catch (err) {
+      console.error('Error updating title:', err)
+    }
     setEditingChatId(null)
   }
 
-  // Send message
   const sendMessage = async () => {
     if (!input.trim() || !activeChat) return
     setIsLoading(true)
@@ -187,12 +160,10 @@ export default function Chat() {
     const userMsg = { role: 'user', content: input.trim() }
     const updatedMessages = [...messages, userMsg]
 
-    let updated = chats.map(c =>
-      c.id === activeChatId
-        ? { ...c, messages: updatedMessages, updatedAt: new Date().toISOString() }
-        : c
-    )
-    persistChats(updated)
+    // Optimistic UI update
+    setChats(prev => prev.map(c =>
+      c.id === activeChatId ? { ...c, messages: updatedMessages } : c
+    ))
     setInput('')
 
     try {
@@ -201,61 +172,33 @@ export default function Chat() {
         role: 'system',
         content: `Sos el asistente IA de Allaria Hub. Estás corriendo como ${modelInfo.desc}. Si te preguntan qué modelo sos, respondé que sos ${modelInfo.desc}.`,
       }
+
       const apiMessages = [
         systemMsg,
-        ...updatedMessages.map(m => ({
-          role: m.role,
-          content: m.content,
-        })),
+        ...updatedMessages
+          .filter(m => m.role === 'user' || m.role === 'assistant')
+          .map(m => ({ role: m.role, content: m.content })),
       ]
 
-      const res = await fetch(LITELLM_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${LITELLM_KEY}`,
-        },
-        body: JSON.stringify({
-          model: selectedModel,
-          messages: apiMessages,
-          temperature: 0.7,
-          max_tokens: 4096,
-        }),
-      })
+      const data = await api.sendMessage(activeChatId, selectedModel, apiMessages)
 
-      const data = await res.json()
+      const assistantContent = data.choices?.[0]?.message?.content || 'Sin respuesta.'
+      const assistantMsg = { role: 'assistant', content: assistantContent }
 
-      if (data.error) {
-        throw new Error(data.error.message || JSON.stringify(data.error))
-      }
-
-      const text = data.choices?.[0]?.message?.content || 'Sin respuesta.'
-      const assistantMsg = { role: 'assistant', content: text }
-      const finalMessages = [...updatedMessages, assistantMsg]
-
-      const autoTitle = updatedMessages.filter(m => m.role === 'user').length === 1
-        ? inferTitle(updatedMessages)
-        : null
-
-      updated = chats.map(c =>
+      setChats(prev => prev.map(c =>
         c.id === activeChatId
           ? {
               ...c,
-              messages: finalMessages,
-              updatedAt: new Date().toISOString(),
-              ...(autoTitle && c.title === 'Nuevo chat' ? { title: autoTitle } : {}),
+              messages: [...updatedMessages, assistantMsg],
+              ...(data._chatTitle ? { title: data._chatTitle } : {}),
             }
           : c
-      )
-      persistChats(updated)
+      ))
     } catch (err) {
-      const errorMsg = { role: 'assistant', content: `**Error:** ${err.message}\n\nRevisá la conexión con el servidor LiteLLM.` }
-      updated = chats.map(c =>
-        c.id === activeChatId
-          ? { ...c, messages: [...updatedMessages, errorMsg], updatedAt: new Date().toISOString() }
-          : c
-      )
-      persistChats(updated)
+      const errorMsg = { role: 'assistant', content: `**Error:** ${err.message}\n\nRevisá la conexión con el servidor.` }
+      setChats(prev => prev.map(c =>
+        c.id === activeChatId ? { ...c, messages: [...updatedMessages, errorMsg] } : c
+      ))
     } finally {
       setIsLoading(false)
       inputRef.current?.focus()
@@ -275,14 +218,24 @@ export default function Chat() {
     setTimeout(() => setCopiedIdx(null), 2000)
   }
 
-  const clearChat = () => {
+  const clearChat = async () => {
     if (!activeChat) return
-    const updated = chats.map(c =>
-      c.id === activeChatId
-        ? { ...c, messages: [WELCOME_MSG], title: 'Nuevo chat', updatedAt: new Date().toISOString() }
-        : c
+    try {
+      await api.clearChat(activeChat.id)
+      setChats(prev => prev.map(c =>
+        c.id === activeChatId ? { ...c, messages: [WELCOME_MSG], title: 'Nuevo chat' } : c
+      ))
+    } catch (err) {
+      console.error('Error clearing chat:', err)
+    }
+  }
+
+  if (loadingChats) {
+    return (
+      <div className="chat-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="typing-indicator"><span /><span /><span /></div>
+      </div>
     )
-    persistChats(updated)
   }
 
   return (
@@ -301,7 +254,7 @@ export default function Chat() {
             <div
               key={chat.id}
               className={`chat-sidebar-item ${chat.id === activeChatId ? 'active' : ''}`}
-              onClick={() => selectChat(chat.id)}
+              onClick={() => setActiveChatId(chat.id)}
             >
               <MessageSquare size={14} className="chat-sidebar-item-icon" />
               {editingChatId === chat.id ? (
@@ -337,7 +290,6 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Toggle sidebar */}
       <button
         className="chat-sidebar-toggle"
         onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -346,9 +298,7 @@ export default function Chat() {
         {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
       </button>
 
-      {/* Main chat area */}
       <div className="chat-main" style={{ marginLeft: sidebarOpen ? '260px' : '0' }}>
-        {/* Header */}
         <div className="chat-header">
           <div className="chat-header-left">
             <div className="chat-header-icon">
@@ -401,10 +351,9 @@ export default function Chat() {
           </div>
         </div>
 
-        {/* Messages */}
         <div className="chat-messages">
           {messages.map((msg, i) => (
-            <div key={i} className={`chat-message ${msg.role}`}>
+            <div key={msg.id || i} className={`chat-message ${msg.role}`}>
               <div className="msg-avatar">
                 {msg.role === 'assistant' ? (
                   <Bot size={18} />
@@ -424,11 +373,7 @@ export default function Chat() {
                   <ReactMarkdown>{msg.content}</ReactMarkdown>
                 </div>
                 {msg.role === 'assistant' && i > 0 && (
-                  <button
-                    className="msg-copy"
-                    onClick={() => copyMessage(msg.content, i)}
-                    title="Copiar"
-                  >
+                  <button className="msg-copy" onClick={() => copyMessage(msg.content, i)} title="Copiar">
                     {copiedIdx === i ? <Check size={13} /> : <Copy size={13} />}
                     {copiedIdx === i ? 'Copiado' : 'Copiar'}
                   </button>
@@ -439,15 +384,9 @@ export default function Chat() {
 
           {isLoading && (
             <div className="chat-message assistant">
-              <div className="msg-avatar">
-                <Bot size={18} />
-              </div>
+              <div className="msg-avatar"><Bot size={18} /></div>
               <div className="msg-body">
-                <div className="typing-indicator">
-                  <span />
-                  <span />
-                  <span />
-                </div>
+                <div className="typing-indicator"><span /><span /><span /></div>
               </div>
             </div>
           )}
@@ -455,7 +394,6 @@ export default function Chat() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
         <div className="chat-input-area">
           <div className="chat-input-container">
             <textarea
