@@ -1,0 +1,114 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: var(--bg-dark);
+  overflow: hidden;
+}
+
+.login-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.login-bg-pattern {
+  position: absolute;
+  inset: -50%;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 40px,
+    rgba(11, 61, 122, 0.03) 40px,
+    rgba(11, 61, 122, 0.03) 42px
+  );
+  animation: login-drift 30s linear infinite;
+}
+
+@keyframes login-drift {
+  from { transform: translate(0, 0); }
+  to { transform: translate(60px, 60px); }
+}
+
+.login-card {
+  position: relative;
+  z-index: 1;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-xl);
+  padding: 48px 40px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow: var(--shadow-xl);
+  animation: scaleIn 0.4s ease;
+}
+
+.login-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+}
+
+.login-title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+
+.login-subtitle {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--allaria-gold);
+  margin-bottom: 24px;
+}
+
+.login-desc {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+
+.login-google-btn {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+  min-height: 44px;
+}
+
+.login-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.login-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--allaria-navy);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.login-footer {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}

@@ -1,0 +1,222 @@
+.docs-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  margin-top: 20px;
+  color: var(--text-tertiary);
+  transition: border-color var(--transition-fast);
+}
+
+.docs-search-bar:focus-within {
+  border-color: var(--allaria-navy);
+  color: var(--allaria-navy);
+}
+
+.docs-search-bar input {
+  flex: 1;
+  font-size: 14px;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.docs-search-bar input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Layout */
+.docs-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+/* Sidebar */
+.docs-sidebar {
+  position: sticky;
+  top: 20px;
+}
+
+.docs-sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-tertiary);
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.docs-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: left;
+  transition: all var(--transition-fast);
+}
+
+.docs-nav-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.docs-nav-item.active {
+  background: rgba(11, 61, 122, 0.06);
+  color: var(--allaria-navy);
+  font-weight: 600;
+}
+
+.docs-nav-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.docs-nav-arrow {
+  margin-left: auto;
+  opacity: 0;
+  transition: all var(--transition-fast);
+}
+
+.docs-nav-item:hover .docs-nav-arrow,
+.docs-nav-item.active .docs-nav-arrow {
+  opacity: 1;
+}
+
+.docs-nav-item.active .docs-nav-arrow {
+  transform: rotate(90deg);
+}
+
+/* Main content */
+.docs-section.hidden {
+  display: none;
+}
+
+.docs-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--allaria-navy);
+}
+
+.docs-section-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.docs-section-header h3 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.docs-section-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  padding: 2px 10px;
+  border-radius: 100px;
+}
+
+/* Articles */
+.docs-articles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.docs-article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  text-align: left;
+  width: 100%;
+  transition: all var(--transition-base);
+  animation: slideUp 0.3s ease both;
+}
+
+.docs-article:hover {
+  border-color: var(--allaria-navy);
+  box-shadow: var(--shadow-md);
+  transform: translateX(4px);
+}
+
+.docs-article-info h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.docs-article-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.docs-article-arrow {
+  color: var(--text-tertiary);
+  transition: all var(--transition-fast);
+}
+
+.docs-article:hover .docs-article-arrow {
+  color: var(--allaria-navy);
+  transform: translateX(4px);
+}
+
+@media (max-width: 768px) {
+  .docs-layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .docs-sidebar {
+    position: static;
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .docs-sidebar-title {
+    width: 100%;
+    padding-bottom: 8px;
+    margin-bottom: 0;
+  }
+
+  .docs-nav-item {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .docs-nav-arrow {
+    display: none;
+  }
+
+  .docs-section.hidden {
+    display: none;
+  }
+}
