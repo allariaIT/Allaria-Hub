@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3098'
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 function getToken() {
   return localStorage.getItem('allaria_token')
@@ -27,7 +27,6 @@ async function request(path, options = {}) {
   return data
 }
 
-// Auth
 export const api = {
   authGoogle: (credential) =>
     request('/api/auth/google', {
@@ -35,7 +34,6 @@ export const api = {
       body: JSON.stringify({ credential }),
     }),
 
-  // Chats
   getChats: () => request('/api/chats'),
 
   createChat: (title) =>
@@ -56,7 +54,6 @@ export const api = {
   clearChat: (id) =>
     request(`/api/chats/${id}/messages`, { method: 'DELETE' }),
 
-  // Chat completions (proxy)
   sendMessage: (chatId, model, messages) =>
     request('/api/chat/completions', {
       method: 'POST',
