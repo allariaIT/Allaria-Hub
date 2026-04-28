@@ -3,7 +3,6 @@ import { api, setToken, clearToken } from '../lib/api'
 
 const AuthContext = createContext(null)
 
-// ⚠️ Reemplazá con tu Client ID de Google Cloud Console
 const GOOGLE_CLIENT_ID = '789748745254-3tfsnd7h5r5k2nl2plqjq91o2f4s5rq5.apps.googleusercontent.com'
 
 export function AuthProvider({ children }) {
@@ -19,25 +18,12 @@ export function AuthProvider({ children }) {
 
   const handleCredentialResponse = useCallback(async (response) => {
     try {
-      // Verificar token en el backend y crear/actualizar usuario
       const data = await api.authGoogle(response.credential)
-      const userData = data.user
       setToken(data.token)
-      localStorage.setItem('allaria_user', JSON.stringify(userData))
-      setUser(userData)
+      localStorage.setItem('allaria_user', JSON.stringify(data.user))
+      setUser(data.user)
     } catch (err) {
       console.error('Auth error:', err)
-      // Fallback: decode locally if backend is down
-      const payload = JSON.parse(atob(response.credential.split('.')[1]))
-      const userData = {
-        id: payload.sub,
-        name: payload.name,
-        email: payload.email,
-        picture: payload.picture,
-      }
-      setToken(response.credential)
-      localStorage.setItem('allaria_user', JSON.stringify(userData))
-      setUser(userData)
     }
   }, [])
 

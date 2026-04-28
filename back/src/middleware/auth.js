@@ -1,7 +1,5 @@
-import { OAuth2Client } from 'google-auth-library'
+import crypto from 'crypto'
 import { prisma } from '../lib/prisma.js'
-
-const client = new OAuth2Client()
 
 export async function authenticate(req, res, next) {
   const header = req.headers.authorization
@@ -12,32 +10,22 @@ export async function authenticate(req, res, next) {
   const token = header.slice(7)
 
   try {
-    // Try Google ID token verification
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID,
+    // Find user whose session token matches
+    const users = await prisma.user.findMany()
+    const user = users.find(u => {
+      const expectedToken = crypto.createHash('sha256')
+        .update(u.id + process.env.GOOGLE_CLIENT_ID)
+        .digest('hex')
+      return expectedToken === token
     })
-    const payload = ticket.getPayload()
 
-    // Upsert user
-    const user = await prisma.user.upsert({
-      where: { id: payload.sub },
-      update: {
-        name: payload.name,
-        email: payload.email,
-        picture: payload.picture,
-      },
-      create: {
-        id: payload.sub,
-        name: payload.name,
-        email: payload.email,
-        picture: payload.picture,
-      },
-    })
+    if (!user) {
+      return res.status(401).json({ error: 'Token inválido' })
+    }
 
     req.user = user
     next()
   } catch (err) {
-    return res.status(401).json({ error: 'Token inválido' })
+    return res.status(401).json({ error: 'Error de autenticación' })
   }
 }

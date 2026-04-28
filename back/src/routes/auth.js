@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { OAuth2Client } from 'google-auth-library'
+import crypto from 'crypto'
 import { prisma } from '../lib/prisma.js'
 
 const client = new OAuth2Client()
@@ -19,6 +20,11 @@ authRouter.post('/google', async (req, res) => {
     })
     const payload = ticket.getPayload()
 
+    // Generate a simple session token
+    const sessionToken = crypto.createHash('sha256')
+      .update(payload.sub + process.env.GOOGLE_CLIENT_ID)
+      .digest('hex')
+
     const user = await prisma.user.upsert({
       where: { id: payload.sub },
       update: {
@@ -34,7 +40,7 @@ authRouter.post('/google', async (req, res) => {
       },
     })
 
-    res.json({ user, token: credential })
+    res.json({ user, token: sessionToken })
   } catch (err) {
     res.status(401).json({ error: 'Token de Google inválido' })
   }
