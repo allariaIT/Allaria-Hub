@@ -3,20 +3,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    # Prioridad: Imagen SWR > Nombre Repo > Fallback
-    image: ${IMAGE_NAME:-${REPO_NAME:-node-app-template}}
-    container_name: ${REPO_NAME:-app-container}
+    image: ${IMAGE_NAME:-${REPO_NAME:-allaria-hub}}
+    container_name: ${REPO_NAME:-allaria-hub}
     restart: always
-    
-    # Puerto dinámico para el ELB
+
     ports:
-      - "${APP_PORT}:${APP_PORT}"
-    
+      - "3097:3097"
+
     environment:
       - REPO_NAME=${REPO_NAME}
-      - APP_PORT=${APP_PORT}
-    
-    # Carga de secretos inyectados por el workflow (VAULTWARDEN_DATABASE_URL, etc)
+      - APP_PORT=3097
+
     env_file:
       - .env
 
@@ -32,7 +29,6 @@ volumes:
     driver_opts:
       type: nfs
       o: "addr=172.30.20.83,rw,nolock,hard,nointr,nfsvers=3,proto=tcp"
-      # El subdirectorio en el SFS se crea con el nombre del repo
       device: ":/SFS/${REPO_NAME}/"
 
 networks:
