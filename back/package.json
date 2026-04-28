@@ -1,0 +1,21 @@
+{
+  "name": "allaria-hub-back",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "db:migrate": "npx prisma migrate deploy",
+    "db:generate": "npx prisma generate",
+    "db:push": "npx prisma db push"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.6.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "google-auth-library": "^9.15.1"
+  },
+  "devDependencies": {
+    "prisma": "^6.6.0"
+  }
+}

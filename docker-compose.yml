@@ -1,25 +1,27 @@
 services:
-  app:
+  front:
     build:
-      context: .
+      context: ./front
       dockerfile: Dockerfile
-    image: ${IMAGE_NAME:-${REPO_NAME:-allaria-hub}}
-    container_name: ${REPO_NAME:-allaria-hub}
+    image: ${IMAGE_NAME:-allaria-hub-front}
+    container_name: allaria-hub-front
     restart: always
-
     ports:
       - "3097:3097"
+    networks:
+      - red-docker
 
-    environment:
-      - REPO_NAME=${REPO_NAME}
-      - APP_PORT=3097
-
+  back:
+    build:
+      context: ./back
+      dockerfile: Dockerfile
+    image: ${IMAGE_NAME_BACK:-allaria-hub-back}
+    container_name: allaria-hub-back
+    restart: always
+    ports:
+      - "3098:3098"
     env_file:
-      - .env
-
-    volumes:
-      - sfs_data:/data
-
+      - ./back/.env
     networks:
       - red-docker
 
