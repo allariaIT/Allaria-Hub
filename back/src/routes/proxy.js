@@ -45,6 +45,7 @@ proxyRouter.post('/completions', async (req, res) => {
         messages,
         temperature,
         max_tokens,
+        user: req.user.email,
       }),
     })
 
