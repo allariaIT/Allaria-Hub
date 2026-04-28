@@ -42,6 +42,7 @@ authRouter.post('/google', async (req, res) => {
 
     res.json({ user, token: sessionToken })
   } catch (err) {
-    res.status(401).json({ error: 'Token de Google inválido' })
+    console.error('Google auth error:', err.message)
+    res.status(401).json({ error: 'Token de Google inválido', detail: err.message })
   }
 })
