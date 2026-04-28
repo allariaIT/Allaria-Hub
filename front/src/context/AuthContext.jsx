@@ -4,7 +4,7 @@ import { api, setToken, clearToken } from '../lib/api'
 const AuthContext = createContext(null)
 
 // ⚠️ Reemplazá con tu Client ID de Google Cloud Console
-const GOOGLE_CLIENT_ID = 'TU_GOOGLE_CLIENT_ID.apps.googleusercontent.com'
+const GOOGLE_CLIENT_ID = '789748745254-3tfsnd7h5r5k2nl2plqjq91o2f4s5rq5.apps.googleusercontent.com'
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
