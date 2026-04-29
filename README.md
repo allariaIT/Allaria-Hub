@@ -1,65 +1,247 @@
-# 🚀 Allaria IT - Service Template
+# Allaria Hub IA
 
-Este repositorio es una plantilla base para servicios desplegados en **Huawei Cloud SWR** mediante el ecosistema de despliegue de **allariaIT**.
+Plataforma corporativa de inteligencia artificial de Allaria. Chat multi-modelo, hub de proyectos y documentación interna.
 
-## 🛠 Estructura del Proyecto
+**URL**: https://ia.allaria.xyz
 
-* **.github/workflows/deployment.yml**: Pipeline CI/CD preconfigurado.
-* **Dockerfile**: Servidor Node.js minimalista.
-* **docker-compose.yml**: Orquestación de contenedores con red externa y volúmenes NFS.
+## Arquitectura
 
-## 📋 Guía de Inicio (Setup del Nuevo Repo)
+```
+ia.allaria.xyz (ELB Huawei)
+       │
+       ▼
+   nginx (3097) ──── front (React + Vite)
+       │
+       │ /api/*
+       ▼
+   Express (3098) ──── back (Node.js + Prisma)
+       │                    │
+       ▼                    ▼
+   LiteLLM              PostgreSQL
+   (litellm.allaria.xyz)  (172.26.20.32)
+```
 
-Al crear un repositorio desde esta plantilla, el pipeline estará listo para ejecutarse, pero necesitas configurar los ambientes y secretos:
+## Stack
 
-### 1. Configurar Ambientes y Ramas
+| Componente | Tecnología |
+|-----------|------------|
+| Frontend | React 19, Vite, React Router, React Markdown, Lucide Icons |
+| Backend | Node.js, Express 5, Prisma ORM |
+| Base de datos | PostgreSQL (con pgvector) en 172.26.20.32 |
+| LLM Gateway | LiteLLM en litellm.allaria.xyz |
+| Auth | Google OAuth (Google Identity Services) |
+| Deploy | Docker, Docker Compose, Huawei Cloud ELB |
 
-En `Settings > Environments` del repositorio, crea los siguientes ambientes para controlar el despliegue:
+## Estructura del Monorepo
 
-* `dev` -> rama `dev` (desarrollo)
-* `stg` -> rama `stg` (staging)
-* `prd` -> rama `prd` (producción)
-* `tst` -> rama `tst` (testing)
+```
+Allaria-Hub/
+├── docker-compose.yml          # Levanta front + back
+├── .github/                    # CI/CD workflows
+│
+├── front/                      # Puerto 3097
+│   ├── Dockerfile              # Multi-stage: node build + nginx
+│   ├── nginx.conf              # SPA + proxy /api → back:3098
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Layout.jsx      # Sidebar con nav + user info
+│   │   │   └── ProtectedRoute.jsx
+│   │   ├── context/
+│   │   │   └── AuthContext.jsx  # Google OAuth provider
+│   │   ├── lib/
+│   │   │   └── api.js          # HTTP client para el backend
+│   │   ├── pages/
+│   │   │   ├── Home.jsx        # Dashboard con stats y acceso rápido
+│   │   │   ├── Chat.jsx        # Chat multi-modelo con adjuntos
+│   │   │   ├── Projects.jsx    # Hub de proyectos con búsqueda
+│   │   │   ├── Docs.jsx        # Documentación interna
+│   │   │   └── Login.jsx       # Login con Google
+│   │   └── data/
+│   │       └── mockData.js     # Datos demo de proyectos y docs
+│   └── public/assets/          # Logos e iconos Allaria
+│
+└── back/                       # Puerto 3098
+    ├── Dockerfile              # Node.js + Prisma
+    ├── .env                    # Variables de entorno
+    ├── prisma/
+    │   └── schema.prisma       # Modelos: User, Chat, Message
+    └── src/
+        ├── index.js            # Express server
+        ├── lib/prisma.js       # Prisma client
+        ├── middleware/
+        │   └── auth.js         # Verificación de session token
+        └── routes/
+            ├── auth.js         # POST /api/auth/google
+            ├── chats.js        # CRUD /api/chats
+            └── proxy.js        # POST /api/chat/completions
+```
 
-### 2. Variables y Secretos
+## Funcionalidades
 
-El pipeline utiliza configuración heredada de la Organización y específica del repositorio.
+### Chat IA Multi-Modelo
+- **3 providers**: Gemini (Google), ChatGPT (OpenAI), Claude (Anthropic)
+- **5 modelos**: Gemini Rápido, Gemini Pensar, ChatGPT Rápido, ChatGPT Pensar, Claude Sonnet 4.5
+- Selector visual con logos y colores por provider
+- Hover en Gemini/ChatGPT despliega variantes (Rápido/Pensar)
+- **Archivos adjuntos**: imágenes, PDFs, audio, video, código, texto
+- Auto-switch a Gemini al adjuntar archivos (mejor soporte multimodal)
+- Toast de notificación al cambiar de modelo
+- Historial de conversaciones por usuario (persistido en PostgreSQL)
+- Crear, renombrar, eliminar chats
+- Auto-título basado en el primer mensaje
+- System prompt que identifica el modelo y habilita análisis de adjuntos
+- Markdown rendering con syntax highlight para código
+- Botón de copiar respuestas
+- Typing indicator
 
-**Configuración del Workflow (`.github/workflows/deployment.yml`):**
-Edita los valores en la sección `with:` si tu proyecto requiere una configuración distinta a la default:
+### Autenticación
+- Google OAuth via Google Identity Services (One Tap)
+- Session token persistente (SHA256 de Google sub + Client ID)
+- Upsert de usuario en DB al loguearse
+- Foto, nombre y email de Google visibles en sidebar
+- Botón de cerrar sesión
 
-* `registry_url`: Endpoint de SWR (default: `swr.sa-argentina-1.myhuaweicloud.com`).
-* `registry_organization`: Organización SWR (default: `developers`).
+### Hub de Proyectos
+- Grid de proyectos con cards (título, autor, descripción, tags, estrellas)
+- Búsqueda por título, autor, tecnología
+- Filtro por estado: Producción, En desarrollo, Beta
+- Datos mock (6 proyectos demo)
 
-**Variables de Repositorio (`Settings > Secrets and variables > Actions > Variables`):**
+### Documentación
+- 4 secciones: Primeros Pasos, Arquitectura, APIs, DevOps
+- Sidebar de navegación con secciones expandibles
+- Buscador de artículos
+- Tiempo de lectura estimado
 
-* `APP_PORT`: (Requerido) Puerto TCP donde escucha la aplicación (ej. `8080`).
+### Home / Dashboard
+- Hero con branding Allaria
+- 4 stat cards (proyectos, usuarios, actualizaciones, uptime)
+- 3 cards de acceso rápido (Chat, Proyectos, Docs)
 
-**Secretos de Repositorio (`Settings > Secrets and variables > Actions > Secrets`):**
+## API del Backend
 
-* `SWR_USER`: Usuario de Huawei SWR.
-* `SWR_PASS`: Contraseña de Huawei SWR.
+### Auth
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/api/auth/google` | Verificar token de Google, crear/actualizar usuario, devuelve session token |
 
-**Secretos de Ambiente (`Settings > Secrets and variables > Actions > Environments > [ENVIRONMENT_NAME] > Secrets`):**
+### Chats
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/chats` | Listar chats del usuario con mensajes |
+| POST | `/api/chats` | Crear nuevo chat |
+| PATCH | `/api/chats/:id` | Renombrar chat |
+| DELETE | `/api/chats/:id` | Eliminar chat |
+| DELETE | `/api/chats/:id/messages` | Limpiar mensajes de un chat |
 
-* `SERVER_PRIV_KEY`: Llave SSH para conexión al host de despliegue.
-* `SERVER_ADDRESS`: Dirección IP del host de despliegue.
-* `SERVER_USER`: Usuario del host de despliegue.
+### Chat Completions (Proxy LiteLLM)
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/api/chat/completions` | Proxy a LiteLLM. Guarda mensajes en DB. Envía email del usuario |
 
-#### Agregar nuevos secretos
+### Health
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/health` | Health check |
 
-* Agregar los secretos en la sección `Secrets` de cada ambiente.
-* Editar el archivo `.github/workflows/deployment.yml` para agregar los nuevos secretos. (En `env_secrets`)
+## Base de Datos
 
-## 📦 Almacenamiento (SFS)
+### Modelos Prisma
 
-El stack monta un volumen NFS compartido automáticamente (CREAR ANTES DEL DESPLIEGUE):
+**User**
+- `id` (String, PK) — Google sub ID
+- `email` (String, unique)
+- `name`, `picture`
+- `createdAt`, `updatedAt`
 
-* **Host**: `172.30.20.83:/SFS/${REPO_NAME}/`
-* **Container**: `/data`
+**Chat**
+- `id` (String, PK, cuid)
+- `title` (default: "Nuevo chat")
+- `userId` → User
+- `createdAt`, `updatedAt`
 
-Cualquier archivo que deba persistir entre despliegues debe guardarse en `/data`.
+**Message**
+- `id` (String, PK, cuid)
+- `chatId` → Chat (cascade delete)
+- `role` — "user" | "assistant"
+- `content` — Texto plano (adjuntos se guardan como `[📎 nombre]`)
+- `model` — Modelo usado (solo en respuestas)
+- `createdAt`
 
-## 🌐 Red
+## Variables de Entorno
 
-El contenedor se conecta a la red externa `red-docker`. Asegúrate de que esta red exista en el servidor de destino antes del despliegue.
+### back/.env
+```env
+DATABASE_URL=postgresql://root:02DeAbril@172.26.20.32:5432/allaria_hub
+GOOGLE_CLIENT_ID=789748745254-xxx.apps.googleusercontent.com
+LITELLM_URL=https://litellm.allaria.xyz/v1/chat/completions
+LITELLM_KEY=sk-xxx
+PORT=3098
+CORS_ORIGIN=https://ia.allaria.xyz
+```
+
+### front/.env
+```env
+VITE_API_URL=    # Vacío = rutas relativas (nginx proxea /api)
+```
+
+### Google Cloud Console
+- Proyecto: Allaria Hub
+- OAuth 2.0 Client ID (Web application)
+- Authorized JavaScript origins: `https://ia.allaria.xyz`, `http://localhost:5174`
+
+## Deploy
+
+### Requisitos
+- Docker + Docker Compose
+- Red Docker `red-docker` existente
+- PostgreSQL accesible desde el servidor
+- DNS `ia.allaria.xyz` apuntando al ELB (puerto 3097)
+
+### Primer deploy
+```bash
+git clone https://github.com/AllariaIT/Allaria-Hub.git
+cd Allaria-Hub
+docker compose up -d --build
+```
+
+### Actualizar
+```bash
+git pull
+docker compose up -d --build
+```
+
+### Puertos
+| Servicio | Puerto |
+|----------|--------|
+| Frontend (nginx) | 3097 |
+| Backend (Express) | 3098 |
+
+## Design System
+
+- **Colores**: Navy `#0B3D7A`, Gold `#B69A5B`
+- **Tipografía**: Playfair Display (headings), DM Sans (body), JetBrains Mono (code)
+- **Patrones**: Diagonales inspiradas en el logo Allaria
+- **Responsive**: Sidebar colapsable en mobile
+
+## Modelos disponibles
+
+| Selector | Model ID (LiteLLM) | Provider |
+|----------|-------------------|----------|
+| Gemini Rápido | `gemini/gemini-2.5-flash` | Google |
+| Gemini Pensar | `gemini/gemini-2.5-pro` | Google |
+| ChatGPT Rápido | `openai/gpt-4-turbo` | OpenAI |
+| ChatGPT Pensar | `openai/gpt-4o` | OpenAI |
+| Claude Sonnet 4.5 | `claude-sonnet-4-5` | Anthropic |
+
+## Soporte de archivos adjuntos
+
+| Tipo | Gemini | ChatGPT | Claude |
+|------|--------|---------|--------|
+| Imágenes (png, jpg, webp, gif) | ✅ | ✅ | ✅ |
+| PDF | ✅ | ✅ | ✅ |
+| Audio (mp3, wav, ogg) | ✅ | ✅ | ❌ |
+| Video | ✅ | ❌ | ❌ |
+| Texto/código | ✅ | ✅ | ✅ |
+
+> Al adjuntar un archivo, el chat cambia automáticamente a Gemini (mejor soporte multimodal).
