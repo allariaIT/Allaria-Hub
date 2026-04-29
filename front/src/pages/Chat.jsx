@@ -174,19 +174,39 @@ export default function Chat() {
     }
 
     files.forEach(file => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        const base64 = reader.result
-        const isImage = file.type.startsWith('image/')
-        setAttachments(prev => [...prev, {
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          base64,
-          isImage,
-        }])
+      const isImage = file.type.startsWith('image/')
+      const isText = /^text\/|json|javascript|typescript|css|html|xml|csv|markdown|yaml/.test(file.type)
+        || /\.(txt|md|py|js|ts|jsx|tsx|css|html|json|csv|yaml|yml|sh|sql|env)$/i.test(file.name)
+
+      if (isText) {
+        // Read as text
+        const textReader = new FileReader()
+        textReader.onload = () => {
+          setAttachments(prev => [...prev, {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            textContent: textReader.result,
+            isImage: false,
+            isText: true,
+          }])
+        }
+        textReader.readAsText(file)
+      } else {
+        // Read as base64 (images, PDFs, audio, video)
+        const reader = new FileReader()
+        reader.onload = () => {
+          setAttachments(prev => [...prev, {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            base64: reader.result,
+            isImage,
+            isText: false,
+          }])
+        }
+        reader.readAsDataURL(file)
       }
-      reader.readAsDataURL(file)
     })
     e.target.value = ''
   }
@@ -200,16 +220,28 @@ export default function Chat() {
     const parts = []
     if (text) parts.push({ type: 'text', text })
     for (const file of files) {
-      if (file.isImage) {
+      if (file.isImage || file.type === 'application/pdf') {
+        // Imágenes y PDFs van como image_url (Gemini soporta ambos)
         parts.push({
           type: 'image_url',
           image_url: { url: file.base64 },
         })
-      } else {
+        if (!file.isImage) {
+          parts.push({ type: 'text', text: `[📎 ${file.name}]` })
+        }
+      } else if (file.isText && file.textContent) {
+        // Archivos de texto van como contenido inline
         parts.push({
           type: 'text',
-          text: `[Archivo adjunto: ${file.name}]\n\n${atob(file.base64.split(',')[1])}`,
+          text: `--- Archivo: ${file.name} ---\n${file.textContent}\n--- Fin archivo ---`,
         })
+      } else {
+        // Otros archivos binarios (audio, video) van como image_url
+        parts.push({
+          type: 'image_url',
+          image_url: { url: file.base64 },
+        })
+        parts.push({ type: 'text', text: `[📎 ${file.name}]` })
       }
     }
     return parts

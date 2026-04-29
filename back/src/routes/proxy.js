@@ -11,10 +11,16 @@ function extractTextForDb(content) {
   if (Array.isArray(content)) {
     const parts = []
     for (const p of content) {
-      if (p.type === 'text') parts.push(p.text)
-      if (p.type === 'image_url') parts.push('[📎 Imagen adjunta]')
+      if (p.type === 'text' && !p.text.startsWith('--- Archivo:')) {
+        parts.push(p.text)
+      } else if (p.type === 'text' && p.text.startsWith('--- Archivo:')) {
+        const name = p.text.split('\n')[0].replace('--- Archivo: ', '').replace(' ---', '')
+        parts.push(`[📎 ${name}]`)
+      } else if (p.type === 'image_url') {
+        parts.push('[📎 Adjunto]')
+      }
     }
-    return parts.join('\n')
+    return parts.join('\n').replace(/\[📎 Adjunto\]\n\[📎 /g, '[📎 ')
   }
   return ''
 }
