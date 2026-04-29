@@ -35,7 +35,7 @@ const PROVIDERS = [
     color: '#D97757',
     colorLight: 'rgba(217, 119, 87, 0.1)',
     models: [
-      { id: 'anthropic/claude-opus-4', label: 'Opus 4', desc: 'Claude Opus 4' },
+      { id: 'claude-sonnet-4-5', label: 'Sonnet 4.5', desc: 'Claude Sonnet 4.5' },
     ],
   },
 ]
