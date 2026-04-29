@@ -8,13 +8,14 @@ datasource db {
 }
 
 model User {
-  id        String   @id // Google sub ID
-  email     String   @unique
-  name      String
-  picture   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  chats     Chat[]
+  id          String           @id // Google sub ID
+  email       String           @unique
+  name        String
+  picture     String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  chats       Chat[]
+  connections UserConnection[]
 }
 
 model Chat {
@@ -39,4 +40,20 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([chatId])
+}
+
+model UserConnection {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String    // "gmail"
+  accessToken  String
+  refreshToken String
+  scopes       String    // scopes otorgados, comma-separated
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
 }

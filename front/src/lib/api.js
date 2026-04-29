@@ -54,9 +54,21 @@ export const api = {
   clearChat: (id) =>
     request(`/api/chats/${id}/messages`, { method: 'DELETE' }),
 
-  sendMessage: (chatId, model, messages) =>
+  // Connectors
+  getConnectors: () => request('/api/connectors'),
+
+  connectProvider: (provider) =>
+    request('/api/connectors/auth', {
+      method: 'POST',
+      body: JSON.stringify({ provider }),
+    }),
+
+  disconnectProvider: (provider) =>
+    request(`/api/connectors/${provider}`, { method: 'DELETE' }),
+
+  sendMessage: (chatId, model, messages, connectors = []) =>
     request('/api/chat/completions', {
       method: 'POST',
-      body: JSON.stringify({ chatId, model, messages }),
+      body: JSON.stringify({ chatId, model, messages, connectors }),
     }),
 }

@@ -7,6 +7,7 @@ import {
 import ReactMarkdown from 'react-markdown'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
+import ConnectorPicker from '../components/ConnectorPicker'
 import './Chat.css'
 
 const PROVIDERS = [
@@ -72,6 +73,7 @@ export default function Chat() {
   const [editTitle, setEditTitle] = useState('')
   const [attachments, setAttachments] = useState([])
   const [toast, setToast] = useState(null)
+  const [activeConnectors, setActiveConnectors] = useState([])
 
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -160,6 +162,12 @@ export default function Chat() {
   const showToast = (message) => {
     setToast(message)
     setTimeout(() => setToast(null), 4000)
+  }
+
+  const toggleConnector = (id) => {
+    setActiveConnectors(prev =>
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+    )
   }
 
   const GEMINI_FLASH = 'gemini/gemini-2.5-flash'
@@ -284,7 +292,7 @@ export default function Chat() {
       const { model: modelInfo } = getSelectedModelInfo(selectedModel)
       const systemMsg = {
         role: 'system',
-        content: `Sos el asistente IA de Allaria Hub. Estás corriendo como ${modelInfo.desc}. Si te preguntan qué modelo sos, respondé que sos ${modelInfo.desc}. Podés recibir y analizar archivos adjuntos como imágenes, PDFs, audio, video y archivos de texto/código. Cuando el usuario adjunta un archivo, lo recibís directamente en el mensaje y podés analizarlo. No digas que no podés leer archivos.`,
+        content: `Sos el asistente IA de Allaria Hub. Estás corriendo como ${modelInfo.desc}. Si te preguntan qué modelo sos, respondé que sos ${modelInfo.desc}. Podés recibir y analizar archivos adjuntos como imágenes, PDFs, audio, video y archivos de texto/código. Cuando el usuario adjunta un archivo, lo recibís directamente en el mensaje y podés analizarlo. No digas que no podés leer archivos.${activeConnectors.includes('gmail') ? ' Tenés acceso al Gmail del usuario. Podés listar, leer, buscar y enviar emails usando las herramientas disponibles. Antes de enviar un email, SIEMPRE mostrá al usuario el borrador y pedí confirmación.' : ''}`,
       }
 
       const apiMessages = [
@@ -294,7 +302,7 @@ export default function Chat() {
           .map(m => ({ role: m.role, content: m.content })),
       ]
 
-      const data = await api.sendMessage(activeChatId, selectedModel, apiMessages)
+      const data = await api.sendMessage(activeChatId, selectedModel, apiMessages, activeConnectors)
 
       const assistantContent = data.choices?.[0]?.message?.content || 'Sin respuesta.'
       const assistantMsg = { role: 'assistant', content: assistantContent }
@@ -456,6 +464,11 @@ export default function Chat() {
                   )
                 })}
               </div>
+              <ConnectorPicker
+                activeConnectors={activeConnectors}
+                onToggle={toggleConnector}
+                onToast={showToast}
+              />
             </div>
           </div>
           <div className="chat-header-actions">
