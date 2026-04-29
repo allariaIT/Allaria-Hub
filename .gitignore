@@ -13,7 +13,7 @@ dist-ssr
 *.local
 
 # Env
-# back/.env  ← tracked para simplificar deploy
+.env
 
 # Editor directories and files
 .vscode/*
