@@ -12,8 +12,8 @@ dist
 dist-ssr
 *.local
 
-# Env with secrets (keep .env.example)
-back/.env
+# Env
+# back/.env  ← tracked para simplificar deploy
 
 # Editor directories and files
 .vscode/*
