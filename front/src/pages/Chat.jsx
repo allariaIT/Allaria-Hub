@@ -464,14 +464,14 @@ export default function Chat() {
                   )
                 })}
               </div>
-              <ConnectorPicker
-                activeConnectors={activeConnectors}
-                onToggle={toggleConnector}
-                onToast={showToast}
-              />
             </div>
           </div>
           <div className="chat-header-actions">
+            <ConnectorPicker
+              activeConnectors={activeConnectors}
+              onToggle={toggleConnector}
+              onToast={showToast}
+            />
             <button className="btn btn-outline btn-sm" onClick={clearChat} title="Limpiar chat">
               <Trash2 size={14} />
             </button>
