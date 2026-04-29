@@ -284,7 +284,7 @@ export default function Chat() {
       const { model: modelInfo } = getSelectedModelInfo(selectedModel)
       const systemMsg = {
         role: 'system',
-        content: `Sos el asistente IA de Allaria Hub. Estás corriendo como ${modelInfo.desc}. Si te preguntan qué modelo sos, respondé que sos ${modelInfo.desc}.`,
+        content: `Sos el asistente IA de Allaria Hub. Estás corriendo como ${modelInfo.desc}. Si te preguntan qué modelo sos, respondé que sos ${modelInfo.desc}. Podés recibir y analizar archivos adjuntos como imágenes, PDFs, audio, video y archivos de texto/código. Cuando el usuario adjunta un archivo, lo recibís directamente en el mensaje y podés analizarlo. No digas que no podés leer archivos.`,
       }
 
       const apiMessages = [
