@@ -6,10 +6,15 @@ export const proxyRouter = Router()
 const LITELLM_URL = process.env.LITELLM_URL || 'https://litellm.allaria.xyz/v1/chat/completions'
 const LITELLM_KEY = process.env.LITELLM_KEY
 
-function extractText(content) {
+function extractTextForDb(content) {
   if (typeof content === 'string') return content
   if (Array.isArray(content)) {
-    return content.filter(p => p.type === 'text').map(p => p.text).join('\n')
+    const parts = []
+    for (const p of content) {
+      if (p.type === 'text') parts.push(p.text)
+      if (p.type === 'image_url') parts.push('[📎 Imagen adjunta]')
+    }
+    return parts.join('\n')
   }
   return ''
 }
@@ -35,7 +40,7 @@ proxyRouter.post('/completions', async (req, res) => {
         data: {
           chatId,
           role: 'user',
-          content: extractText(lastUserMsg.content),
+          content: extractTextForDb(lastUserMsg.content),
         },
       })
     }
@@ -76,7 +81,7 @@ proxyRouter.post('/completions', async (req, res) => {
     // Auto-título en primer intercambio
     const msgCount = await prisma.message.count({ where: { chatId, role: 'user' } })
     if (msgCount === 1 && chat.title === 'Nuevo chat') {
-      const text = extractText(lastUserMsg.content)
+      const text = extractTextForDb(lastUserMsg.content)
       const title = text.slice(0, 50) + (text.length > 50 ? '...' : '')
       if (title) {
         await prisma.chat.update({
