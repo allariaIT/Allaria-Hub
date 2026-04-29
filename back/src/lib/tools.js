@@ -3,6 +3,14 @@ import { calendarListEvents, calendarCreateEvent, calendarSearchEvents } from '.
 import { tasksListAll, tasksCreate, tasksComplete, tasksSearch } from './gtasks.js'
 import { driveListFiles, driveSearchFiles, driveGetFile } from './drive.js'
 
+// Tools que requieren confirmación del usuario antes de ejecutarse
+export const CONFIRMABLE_TOOLS = new Set([
+  'gmail_send',
+  'calendar_create',
+  'tasks_create',
+  'tasks_complete',
+])
+
 export const TOOL_DEFINITIONS = {
   gmail: [
     {

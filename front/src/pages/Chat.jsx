@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import {
   Send, Trash2, Sparkles, Bot, User, Copy, Check,
   Plus, MessageSquare, ChevronLeft, ChevronRight, Pencil,
-  Paperclip, X, FileText, Image as ImageIcon
+  Paperclip, X, FileText, Image as ImageIcon,
+  Mail, Calendar, CheckSquare, HardDrive, ShieldAlert
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { useAuth } from '../context/AuthContext'
@@ -55,6 +56,64 @@ const WELCOME_MSG = {
   content: '¡Hola! Soy el asistente IA de Allaria Hub.\n\n¿En qué puedo ayudarte hoy?\n- Código y arquitectura\n- Análisis de datos\n- Documentación técnica\n- Ideas y brainstorming',
 }
 
+const TOOL_ICONS = {
+  gmail_send: Mail,
+  calendar_create: Calendar,
+  tasks_create: CheckSquare,
+  tasks_complete: CheckSquare,
+}
+
+const TOOL_LABELS = {
+  gmail_send: 'Enviar email',
+  calendar_create: 'Crear evento',
+  tasks_create: 'Crear tarea',
+  tasks_complete: 'Completar tarea',
+}
+
+function ConfirmationCard({ confirmation }) {
+  const { toolName, args } = confirmation
+  const Icon = TOOL_ICONS[toolName] || ShieldAlert
+  const label = TOOL_LABELS[toolName] || toolName
+
+  return (
+    <div className="confirmation-card">
+      <div className="confirmation-card-header">
+        <Icon size={16} />
+        <span>{label}</span>
+      </div>
+      <div className="confirmation-card-body">
+        {toolName === 'gmail_send' && (
+          <>
+            <div className="confirmation-field"><strong>Para:</strong> {args.to}</div>
+            <div className="confirmation-field"><strong>Asunto:</strong> {args.subject}</div>
+            <div className="confirmation-field confirmation-body-preview">{args.body}</div>
+          </>
+        )}
+        {toolName === 'calendar_create' && (
+          <>
+            <div className="confirmation-field"><strong>Evento:</strong> {args.summary}</div>
+            {args.description && <div className="confirmation-field">{args.description}</div>}
+            <div className="confirmation-field"><strong>Inicio:</strong> {new Date(args.start).toLocaleString('es-AR')}</div>
+            <div className="confirmation-field"><strong>Fin:</strong> {new Date(args.end).toLocaleString('es-AR')}</div>
+            {args.location && <div className="confirmation-field"><strong>Lugar:</strong> {args.location}</div>}
+            {args.attendees?.length > 0 && <div className="confirmation-field"><strong>Invitados:</strong> {args.attendees.join(', ')}</div>}
+          </>
+        )}
+        {toolName === 'tasks_create' && (
+          <>
+            <div className="confirmation-field"><strong>Tarea:</strong> {args.title}</div>
+            {args.notes && <div className="confirmation-field">{args.notes}</div>}
+            {args.due && <div className="confirmation-field"><strong>Vence:</strong> {new Date(args.due).toLocaleDateString('es-AR')}</div>}
+          </>
+        )}
+        {toolName === 'tasks_complete' && (
+          <div className="confirmation-field"><strong>ID:</strong> {args.taskId}</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Chat() {
   const { user } = useAuth()
   const userName = user?.name || 'Vos'
@@ -74,6 +133,7 @@ export default function Chat() {
   const [attachments, setAttachments] = useState([])
   const [toast, setToast] = useState(null)
   const [activeConnectors, setActiveConnectors] = useState([])
+  const [pendingConfirmation, setPendingConfirmation] = useState(null)
 
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -310,6 +370,28 @@ export default function Chat() {
 
       const data = await api.sendMessage(activeChatId, selectedModel, apiMessages, activeConnectors)
 
+      if (data._pendingConfirmations) {
+        // El LLM quiere ejecutar acciones que necesitan confirmación
+        setPendingConfirmation({
+          confirmations: data._pendingConfirmations,
+          llmMessages: data._llmMessages,
+          model: data._model,
+          connectors: data._connectors,
+          chatId: data._chatId,
+        })
+        // Mostrar preview en el chat
+        const previewMsg = {
+          role: 'assistant',
+          content: '',
+          _confirmations: data._pendingConfirmations,
+        }
+        setChats(prev => prev.map(c =>
+          c.id === activeChatId ? { ...c, messages: [...updatedMessages, previewMsg] } : c
+        ))
+        setIsLoading(false)
+        return
+      }
+
       const assistantContent = data.choices?.[0]?.message?.content || 'Sin respuesta.'
       const assistantMsg = { role: 'assistant', content: assistantContent }
 
@@ -330,6 +412,57 @@ export default function Chat() {
     } finally {
       setIsLoading(false)
       inputRef.current?.focus()
+    }
+  }
+
+  const handleConfirmation = async (approved) => {
+    if (!pendingConfirmation) return
+    setIsLoading(true)
+
+    const { confirmations, llmMessages, model, connectors, chatId } = pendingConfirmation
+    const resolvedConfs = confirmations.map(c => ({ ...c, approved }))
+
+    // Quitar el mensaje de preview
+    const currentMessages = messages.filter(m => !m._confirmations)
+
+    try {
+      const data = await api.confirmAction(chatId, model, connectors, llmMessages, resolvedConfs)
+
+      if (data._pendingConfirmations) {
+        setPendingConfirmation({
+          confirmations: data._pendingConfirmations,
+          llmMessages: data._llmMessages,
+          model: data._model,
+          connectors: data._connectors,
+          chatId: data._chatId,
+        })
+        const previewMsg = {
+          role: 'assistant',
+          content: '',
+          _confirmations: data._pendingConfirmations,
+        }
+        setChats(prev => prev.map(c =>
+          c.id === activeChatId ? { ...c, messages: [...currentMessages, previewMsg] } : c
+        ))
+        setIsLoading(false)
+        return
+      }
+
+      setPendingConfirmation(null)
+      const assistantContent = data.choices?.[0]?.message?.content || 'Sin respuesta.'
+      const assistantMsg = { role: 'assistant', content: assistantContent }
+
+      setChats(prev => prev.map(c =>
+        c.id === activeChatId ? { ...c, messages: [...currentMessages, assistantMsg] } : c
+      ))
+    } catch (err) {
+      setPendingConfirmation(null)
+      const errorMsg = { role: 'assistant', content: `**Error:** ${err.message}` }
+      setChats(prev => prev.map(c =>
+        c.id === activeChatId ? { ...c, messages: [...currentMessages, errorMsg] } : c
+      ))
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -509,14 +642,42 @@ export default function Chat() {
                     ))}
                   </div>
                 )}
-                <div className="msg-content">
-                  <ReactMarkdown>{getDisplayContent(msg)}</ReactMarkdown>
-                </div>
-                {msg.role === 'assistant' && i > 0 && (
-                  <button className="msg-copy" onClick={() => copyMessage(msg.content, i)} title="Copiar">
-                    {copiedIdx === i ? <Check size={13} /> : <Copy size={13} />}
-                    {copiedIdx === i ? 'Copiado' : 'Copiar'}
-                  </button>
+                {msg._confirmations ? (
+                  <div className="confirmation-cards">
+                    {msg._confirmations.map((conf, ci) => (
+                      <ConfirmationCard key={ci} confirmation={conf} />
+                    ))}
+                    <div className="confirmation-actions">
+                      <button
+                        className="confirmation-btn confirm"
+                        onClick={() => handleConfirmation(true)}
+                        disabled={isLoading}
+                      >
+                        <Check size={15} />
+                        Confirmar
+                      </button>
+                      <button
+                        className="confirmation-btn cancel"
+                        onClick={() => handleConfirmation(false)}
+                        disabled={isLoading}
+                      >
+                        <X size={15} />
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="msg-content">
+                      <ReactMarkdown>{getDisplayContent(msg)}</ReactMarkdown>
+                    </div>
+                    {msg.role === 'assistant' && i > 0 && (
+                      <button className="msg-copy" onClick={() => copyMessage(msg.content, i)} title="Copiar">
+                        {copiedIdx === i ? <Check size={13} /> : <Copy size={13} />}
+                        {copiedIdx === i ? 'Copiado' : 'Copiar'}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>

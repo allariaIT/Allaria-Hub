@@ -71,4 +71,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ chatId, model, messages, connectors }),
     }),
+
+  confirmAction: (chatId, model, connectors, llmMessages, confirmations) =>
+    request('/api/chat/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ chatId, model, connectors, llmMessages, confirmations }),
+    }),
 }
