@@ -71,6 +71,7 @@ export default function Chat() {
   const [editingChatId, setEditingChatId] = useState(null)
   const [editTitle, setEditTitle] = useState('')
   const [attachments, setAttachments] = useState([])
+  const [toast, setToast] = useState(null)
 
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -156,8 +157,22 @@ export default function Chat() {
     setEditingChatId(null)
   }
 
+  const showToast = (message) => {
+    setToast(message)
+    setTimeout(() => setToast(null), 4000)
+  }
+
+  const GEMINI_FLASH = 'gemini/gemini-2.5-flash'
+
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files)
+
+    // Switch to Gemini if not already
+    if (selectedModel !== GEMINI_FLASH && selectedModel !== 'gemini/gemini-2.5-pro') {
+      setSelectedModel(GEMINI_FLASH)
+      showToast('📎 Se cambió a Gemini — es el mejor modelo para analizar archivos adjuntos')
+    }
+
     files.forEach(file => {
       const reader = new FileReader()
       reader.onload = () => {
@@ -491,7 +506,7 @@ export default function Chat() {
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css"
+              accept="image/*,audio/*,video/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css,.doc,.docx,.xls,.xlsx"
               onChange={handleFileSelect}
               style={{ display: 'none' }}
             />
@@ -524,6 +539,12 @@ export default function Chat() {
             Enter para enviar · Shift+Enter para nueva línea · 📎 para adjuntar
           </div>
         </div>
+
+        {toast && (
+          <div className="chat-toast">
+            <span>{toast}</span>
+          </div>
+        )}
       </div>
     </div>
   )
