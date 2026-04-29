@@ -6,38 +6,40 @@ export const proxyRouter = Router()
 const LITELLM_URL = process.env.LITELLM_URL || 'https://litellm.allaria.xyz/v1/chat/completions'
 const LITELLM_KEY = process.env.LITELLM_KEY
 
+function extractText(content) {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.filter(p => p.type === 'text').map(p => p.text).join('\n')
+  }
+  return ''
+}
+
 // POST /api/chat/completions - Proxy a LiteLLM + guardar mensajes
 proxyRouter.post('/completions', async (req, res) => {
-  const { chatId, model, messages, temperature = 0.7, max_tokens = 4096 } = req.body
-
-  if (!chatId || !messages?.length) {
-    return res.status(400).json({ error: 'chatId y messages son requeridos' })
-  }
-
-  // Verificar que el chat pertenece al usuario
-  const chat = await prisma.chat.findFirst({
-    where: { id: chatId, userId: req.user.id },
-  })
-  if (!chat) return res.status(404).json({ error: 'Chat no encontrado' })
-
-  // Guardar mensaje del usuario (texto plano para DB)
-  const lastUserMsg = messages[messages.length - 1]
-  if (lastUserMsg.role === 'user') {
-    const textContent = typeof lastUserMsg.content === 'string'
-      ? lastUserMsg.content
-      : Array.isArray(lastUserMsg.content)
-        ? lastUserMsg.content.filter(p => p.type === 'text').map(p => p.text).join('\n')
-        : ''
-    await prisma.message.create({
-      data: {
-        chatId,
-        role: 'user',
-        content: textContent,
-      },
-    })
-  }
-
   try {
+    const { chatId, model, messages, temperature = 0.7, max_tokens = 4096 } = req.body
+
+    if (!chatId || !messages?.length) {
+      return res.status(400).json({ error: 'chatId y messages son requeridos' })
+    }
+
+    const chat = await prisma.chat.findFirst({
+      where: { id: chatId, userId: req.user.id },
+    })
+    if (!chat) return res.status(404).json({ error: 'Chat no encontrado' })
+
+    // Guardar mensaje del usuario (texto plano para DB)
+    const lastUserMsg = messages[messages.length - 1]
+    if (lastUserMsg.role === 'user') {
+      await prisma.message.create({
+        data: {
+          chatId,
+          role: 'user',
+          content: extractText(lastUserMsg.content),
+        },
+      })
+    }
+
     // Proxy a LiteLLM
     const response = await fetch(LITELLM_URL, {
       method: 'POST',
@@ -62,7 +64,6 @@ proxyRouter.post('/completions', async (req, res) => {
 
     const assistantContent = data.choices?.[0]?.message?.content || 'Sin respuesta.'
 
-    // Guardar respuesta del asistente
     await prisma.message.create({
       data: {
         chatId,
@@ -75,15 +76,17 @@ proxyRouter.post('/completions', async (req, res) => {
     // Auto-título en primer intercambio
     const msgCount = await prisma.message.count({ where: { chatId, role: 'user' } })
     if (msgCount === 1 && chat.title === 'Nuevo chat') {
-      const title = lastUserMsg.content.slice(0, 50) + (lastUserMsg.content.length > 50 ? '...' : '')
-      await prisma.chat.update({
-        where: { id: chatId },
-        data: { title },
-      })
-      data._chatTitle = title
+      const text = extractText(lastUserMsg.content)
+      const title = text.slice(0, 50) + (text.length > 50 ? '...' : '')
+      if (title) {
+        await prisma.chat.update({
+          where: { id: chatId },
+          data: { title },
+        })
+        data._chatTitle = title
+      }
     }
 
-    // Actualizar timestamp del chat
     await prisma.chat.update({
       where: { id: chatId },
       data: { updatedAt: new Date() },
@@ -91,6 +94,7 @@ proxyRouter.post('/completions', async (req, res) => {
 
     res.json(data)
   } catch (err) {
+    console.error('Proxy error:', err.message)
     res.status(502).json({ error: err.message })
   }
 })
