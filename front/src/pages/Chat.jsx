@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   Send, Trash2, Sparkles, Bot, User, Copy, Check,
-  Plus, MessageSquare, ChevronLeft, ChevronRight, Pencil
+  Plus, MessageSquare, ChevronLeft, ChevronRight, Pencil,
+  Paperclip, X, FileText, Image as ImageIcon
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { useAuth } from '../context/AuthContext'
@@ -69,9 +70,11 @@ export default function Chat() {
   const [copiedIdx, setCopiedIdx] = useState(null)
   const [editingChatId, setEditingChatId] = useState(null)
   const [editTitle, setEditTitle] = useState('')
+  const [attachments, setAttachments] = useState([])
 
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   const activeChat = chats.find(c => c.id === activeChatId)
   const messages = activeChat?.messages || []
@@ -153,11 +156,74 @@ export default function Chat() {
     setEditingChatId(null)
   }
 
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files)
+    files.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const base64 = reader.result
+        const isImage = file.type.startsWith('image/')
+        setAttachments(prev => [...prev, {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          base64,
+          isImage,
+        }])
+      }
+      reader.readAsDataURL(file)
+    })
+    e.target.value = ''
+  }
+
+  const removeAttachment = (idx) => {
+    setAttachments(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  function buildUserContent(text, files) {
+    if (!files.length) return text
+    const parts = []
+    if (text) parts.push({ type: 'text', text })
+    for (const file of files) {
+      if (file.isImage) {
+        parts.push({
+          type: 'image_url',
+          image_url: { url: file.base64 },
+        })
+      } else {
+        parts.push({
+          type: 'text',
+          text: `[Archivo adjunto: ${file.name}]\n\n${atob(file.base64.split(',')[1])}`,
+        })
+      }
+    }
+    return parts
+  }
+
+  function getDisplayContent(msg) {
+    if (typeof msg.content === 'string') return msg.content
+    if (Array.isArray(msg.content)) {
+      return msg.content
+        .filter(p => p.type === 'text')
+        .map(p => p.text)
+        .join('\n')
+    }
+    return ''
+  }
+
+  function getImages(msg) {
+    if (!Array.isArray(msg.content)) return []
+    return msg.content
+      .filter(p => p.type === 'image_url')
+      .map(p => p.image_url.url)
+  }
+
   const sendMessage = async () => {
-    if (!input.trim() || !activeChat) return
+    if ((!input.trim() && !attachments.length) || !activeChat) return
     setIsLoading(true)
 
-    const userMsg = { role: 'user', content: input.trim() }
+    const content = buildUserContent(input.trim(), attachments)
+    const userMsg = { role: 'user', content }
     const updatedMessages = [...messages, userMsg]
 
     // Optimistic UI update
@@ -165,6 +231,7 @@ export default function Chat() {
       c.id === activeChatId ? { ...c, messages: updatedMessages } : c
     ))
     setInput('')
+    setAttachments([])
 
     try {
       const { model: modelInfo } = getSelectedModelInfo(selectedModel)
@@ -369,8 +436,15 @@ export default function Chat() {
                     {msg.role === 'assistant' ? 'Allaria IA' : userName}
                   </span>
                 </div>
+                {getImages(msg).length > 0 && (
+                  <div className="msg-images">
+                    {getImages(msg).map((src, j) => (
+                      <img key={j} src={src} alt="Adjunto" className="msg-attached-img" />
+                    ))}
+                  </div>
+                )}
                 <div className="msg-content">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  <ReactMarkdown>{getDisplayContent(msg)}</ReactMarkdown>
                 </div>
                 {msg.role === 'assistant' && i > 0 && (
                   <button className="msg-copy" onClick={() => copyMessage(msg.content, i)} title="Copiar">
@@ -395,7 +469,40 @@ export default function Chat() {
         </div>
 
         <div className="chat-input-area">
+          {attachments.length > 0 && (
+            <div className="attachments-preview">
+              {attachments.map((file, i) => (
+                <div key={i} className="attachment-chip">
+                  {file.isImage ? (
+                    <img src={file.base64} alt={file.name} className="attachment-thumb" />
+                  ) : (
+                    <FileText size={16} />
+                  )}
+                  <span className="attachment-name">{file.name}</span>
+                  <button className="attachment-remove" onClick={() => removeAttachment(i)}>
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="chat-input-container">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
+            <button
+              className="chat-attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
+              title="Adjuntar archivo"
+            >
+              <Paperclip size={18} />
+            </button>
             <textarea
               ref={inputRef}
               value={input}
@@ -408,13 +515,13 @@ export default function Chat() {
             <button
               className="chat-send-btn"
               onClick={sendMessage}
-              disabled={!input.trim() || isLoading}
+              disabled={(!input.trim() && !attachments.length) || isLoading}
             >
               <Send size={18} />
             </button>
           </div>
           <div className="chat-input-hint">
-            Enter para enviar · Shift+Enter para nueva línea
+            Enter para enviar · Shift+Enter para nueva línea · 📎 para adjuntar
           </div>
         </div>
       </div>

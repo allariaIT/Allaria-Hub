@@ -20,14 +20,19 @@ proxyRouter.post('/completions', async (req, res) => {
   })
   if (!chat) return res.status(404).json({ error: 'Chat no encontrado' })
 
-  // Guardar mensaje del usuario
+  // Guardar mensaje del usuario (texto plano para DB)
   const lastUserMsg = messages[messages.length - 1]
   if (lastUserMsg.role === 'user') {
+    const textContent = typeof lastUserMsg.content === 'string'
+      ? lastUserMsg.content
+      : Array.isArray(lastUserMsg.content)
+        ? lastUserMsg.content.filter(p => p.type === 'text').map(p => p.text).join('\n')
+        : ''
     await prisma.message.create({
       data: {
         chatId,
         role: 'user',
-        content: lastUserMsg.content,
+        content: textContent,
       },
     })
   }
