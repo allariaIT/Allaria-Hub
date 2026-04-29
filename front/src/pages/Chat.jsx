@@ -292,7 +292,13 @@ export default function Chat() {
       const { model: modelInfo } = getSelectedModelInfo(selectedModel)
       const systemMsg = {
         role: 'system',
-        content: `Sos el asistente IA de Allaria Hub. Estás corriendo como ${modelInfo.desc}. Si te preguntan qué modelo sos, respondé que sos ${modelInfo.desc}. Podés recibir y analizar archivos adjuntos como imágenes, PDFs, audio, video y archivos de texto/código. Cuando el usuario adjunta un archivo, lo recibís directamente en el mensaje y podés analizarlo. No digas que no podés leer archivos.${activeConnectors.includes('gmail') ? ' Tenés acceso al Gmail del usuario. Podés listar, leer, buscar y enviar emails usando las herramientas disponibles. Antes de enviar un email, SIEMPRE mostrá al usuario el borrador y pedí confirmación.' : ''}`,
+        content: [
+          `Sos el asistente IA de Allaria Hub. Estás corriendo como ${modelInfo.desc}. Si te preguntan qué modelo sos, respondé que sos ${modelInfo.desc}. Podés recibir y analizar archivos adjuntos como imágenes, PDFs, audio, video y archivos de texto/código. Cuando el usuario adjunta un archivo, lo recibís directamente en el mensaje y podés analizarlo. No digas que no podés leer archivos.`,
+          activeConnectors.includes('gmail') && 'Tenés acceso al Gmail del usuario. Podés listar, leer, buscar y enviar emails. Antes de enviar un email, SIEMPRE mostrá el borrador y pedí confirmación.',
+          activeConnectors.includes('calendar') && 'Tenés acceso al Google Calendar del usuario. Podés ver próximos eventos, crear eventos y buscar. Antes de crear un evento, SIEMPRE confirmá los detalles con el usuario.',
+          activeConnectors.includes('tasks') && 'Tenés acceso a Google Tasks del usuario. Podés listar tareas, crear nuevas y marcar como completadas.',
+          activeConnectors.includes('drive') && 'Tenés acceso al Google Drive del usuario. Podés listar archivos recientes, buscar por nombre y ver detalles.',
+        ].filter(Boolean).join(' '),
       }
 
       const apiMessages = [

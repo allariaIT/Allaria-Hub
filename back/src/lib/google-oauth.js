@@ -6,6 +6,17 @@ const SCOPES_MAP = {
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.modify',
   ],
+  calendar: [
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar.events',
+  ],
+  tasks: [
+    'https://www.googleapis.com/auth/tasks',
+  ],
+  drive: [
+    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/drive.metadata.readonly',
+  ],
 }
 
 function createOAuth2Client() {

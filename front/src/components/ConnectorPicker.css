@@ -14,8 +14,8 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
-  background: linear-gradient(135deg, rgba(234, 67, 53, 0.08), rgba(234, 67, 53, 0.04));
-  border: 1px solid rgba(234, 67, 53, 0.2);
+  background: color-mix(in srgb, var(--badge-color) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--badge-color) 20%, transparent);
   cursor: pointer;
   transition: all var(--transition-fast);
   position: relative;
@@ -23,10 +23,10 @@
 }
 
 .connector-active-badge:hover {
-  background: linear-gradient(135deg, rgba(234, 67, 53, 0.14), rgba(234, 67, 53, 0.08));
-  border-color: rgba(234, 67, 53, 0.35);
+  background: color-mix(in srgb, var(--badge-color) 14%, transparent);
+  border-color: color-mix(in srgb, var(--badge-color) 35%, transparent);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(234, 67, 53, 0.12);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--badge-color) 12%, transparent);
 }
 
 .connector-badge-logo {

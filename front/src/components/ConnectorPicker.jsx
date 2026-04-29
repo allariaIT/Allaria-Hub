@@ -3,15 +3,34 @@ import { Loader2, X, Plug } from 'lucide-react'
 import { api } from '../lib/api'
 import './ConnectorPicker.css'
 
-const GMAIL_LOGO = 'https://www.google.com/s2/favicons?sz=64&domain=mail.google.com'
-
 const CONNECTORS = [
   {
     id: 'gmail',
     name: 'Gmail',
-    logo: GMAIL_LOGO,
+    logo: 'https://www.google.com/s2/favicons?sz=64&domain=mail.google.com',
     color: '#EA4335',
     desc: 'Leer, buscar y enviar emails',
+  },
+  {
+    id: 'calendar',
+    name: 'Calendar',
+    logo: 'https://www.google.com/s2/favicons?sz=64&domain=calendar.google.com',
+    color: '#4285F4',
+    desc: 'Ver, crear y buscar eventos',
+  },
+  {
+    id: 'tasks',
+    name: 'Tasks',
+    logo: 'https://www.google.com/s2/favicons?sz=64&domain=tasks.google.com',
+    color: '#1A73E8',
+    desc: 'Listar, crear y completar tareas',
+  },
+  {
+    id: 'drive',
+    name: 'Drive',
+    logo: 'https://www.google.com/s2/favicons?sz=64&domain=drive.google.com',
+    color: '#0F9D58',
+    desc: 'Buscar y ver archivos',
   },
 ]
 
@@ -68,7 +87,12 @@ export default function ConnectorPicker({ activeConnectors, onToggle, onToast })
     <div className="connector-wrapper">
       {/* Active connector badges - shown inline */}
       {CONNECTORS.filter(c => isActive(c.id)).map(conn => (
-        <div key={conn.id} className="connector-active-badge" onClick={() => onToggle(conn.id)}>
+        <div
+          key={conn.id}
+          className="connector-active-badge"
+          style={{ '--badge-color': conn.color }}
+          onClick={() => onToggle(conn.id)}
+        >
           <img src={conn.logo} alt={conn.name} className="connector-badge-logo" />
           <span>{conn.name}</span>
           <div className="connector-badge-dot" />
