@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { Home, MessageSquare, FolderKanban, BookOpen, Menu, X, Sparkles, LogOut } from 'lucide-react'
+import { Home, MessageSquare, FolderKanban, BookOpen, Menu, X, LogOut } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const navItems = [
@@ -57,12 +57,6 @@ export default function Layout() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="sidebar-footer-badge">
-            <div className="dot" />
-            <Sparkles size={14} />
-            <span>Gemini 2.5 · LiteLLM</span>
-          </div>
-
           {user && (
             <div className="sidebar-user">
               <img
