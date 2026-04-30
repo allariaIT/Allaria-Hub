@@ -80,7 +80,15 @@ proxyRouter.post('/completions', async (req, res) => {
 
     const tools = getToolsForConnectors(connectors)
 
-    let llmMessages = [...messages]
+    // Inyectar fecha y hora actual de Buenos Aires como contexto del sistema
+    const now = new Date().toLocaleString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      dateStyle: 'full',
+      timeStyle: 'short',
+    })
+    const systemContext = { role: 'system', content: `Fecha y hora actual en Buenos Aires: ${now}.` }
+    let llmMessages = [systemContext, ...messages]
+
     let data = await callLiteLLM({
       model,
       messages: llmMessages,
