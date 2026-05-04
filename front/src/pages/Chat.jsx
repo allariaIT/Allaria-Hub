@@ -3,7 +3,7 @@ import {
   Send, Trash2, Sparkles, Bot, User, Copy, Check,
   Plus, MessageSquare, ChevronLeft, ChevronRight, Pencil,
   Paperclip, X, FileText, Image as ImageIcon,
-  Mail, Calendar, CheckSquare, HardDrive, ShieldAlert
+  Mail, Calendar, CheckSquare, HardDrive, ShieldAlert, Code, GitBranch
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { useAuth } from '../context/AuthContext'
@@ -61,6 +61,8 @@ const TOOL_ICONS = {
   calendar_create: Calendar,
   tasks_create: CheckSquare,
   tasks_complete: CheckSquare,
+  sandbox_create_project: Code,
+  sandbox_push: GitBranch,
 }
 
 const TOOL_LABELS = {
@@ -68,6 +70,8 @@ const TOOL_LABELS = {
   calendar_create: 'Crear evento',
   tasks_create: 'Crear tarea',
   tasks_complete: 'Completar tarea',
+  sandbox_create_project: 'Crear proyecto',
+  sandbox_push: 'Push a GitLab',
 }
 
 function ConfirmationCard({ confirmation }) {
@@ -108,6 +112,19 @@ function ConfirmationCard({ confirmation }) {
         )}
         {toolName === 'tasks_complete' && (
           <div className="confirmation-field"><strong>ID:</strong> {args.taskId}</div>
+        )}
+        {toolName === 'sandbox_create_project' && (
+          <>
+            <div className="confirmation-field"><strong>Proyecto:</strong> {args.name}</div>
+            <div className="confirmation-field"><strong>Titulo:</strong> {args.title}</div>
+            {args.description && <div className="confirmation-field">{args.description}</div>}
+          </>
+        )}
+        {toolName === 'sandbox_push' && (
+          <>
+            <div className="confirmation-field"><strong>Proyecto:</strong> {args.projectName}</div>
+            <div className="confirmation-field"><strong>Commit:</strong> {args.message}</div>
+          </>
         )}
       </div>
     </div>
@@ -358,6 +375,7 @@ export default function Chat() {
           activeConnectors.includes('calendar') && 'Tenés acceso al Google Calendar del usuario. Podés ver próximos eventos, crear eventos y buscar. Antes de crear un evento, SIEMPRE confirmá los detalles con el usuario.',
           activeConnectors.includes('tasks') && 'Tenés acceso a Google Tasks del usuario. Podés listar tareas, crear nuevas y marcar como completadas.',
           activeConnectors.includes('drive') && 'Tenés acceso al Google Drive del usuario. Podés listar archivos recientes, buscar por nombre y ver detalles.',
+          activeConnectors.includes('sandbox') && 'Tenes acceso al sandbox de proyectos. Podes crear proyectos web con Vite+React, escribir archivos, buildear y deployar previews. Cuando crees o modifiques archivos, hacelo directamente con las tools. Despues de modificar archivos, siempre llama sandbox_build para que el usuario vea los cambios.',
         ].filter(Boolean).join(' '),
       }
 
