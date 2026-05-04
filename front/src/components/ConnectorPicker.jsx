@@ -32,6 +32,14 @@ const CONNECTORS = [
     color: '#0F9D58',
     desc: 'Buscar y ver archivos',
   },
+  {
+    id: 'sandbox',
+    name: 'Sandbox',
+    logo: 'https://www.google.com/s2/favicons?sz=64&domain=docker.com',
+    color: '#2496ED',
+    desc: 'Crear y editar proyectos web',
+    noOAuth: true,
+  },
 ]
 
 export default function ConnectorPicker({ activeConnectors, onToggle, onToast }) {
@@ -56,7 +64,7 @@ export default function ConnectorPicker({ activeConnectors, onToggle, onToast })
     }
   }, [onToast])
 
-  const isConnected = (id) => connections.some(c => c.provider === id)
+  const isConnected = (id) => id === 'sandbox' || connections.some(c => c.provider === id)
   const isActive = (id) => activeConnectors.includes(id)
 
   const handleConnect = async (connector) => {
@@ -157,13 +165,15 @@ export default function ConnectorPicker({ activeConnectors, onToggle, onToast })
                               <div className="connector-toggle-thumb" />
                             </div>
                           </button>
-                          <button
-                            className="connector-btn-disconnect"
-                            onClick={() => handleDisconnect(conn.id)}
-                            title="Desconectar cuenta"
-                          >
-                            Desconectar
-                          </button>
+                          {!conn.noOAuth && (
+                            <button
+                              className="connector-btn-disconnect"
+                              onClick={() => handleDisconnect(conn.id)}
+                              title="Desconectar cuenta"
+                            >
+                              Desconectar
+                            </button>
+                          )}
                         </>
                       )}
                     </div>

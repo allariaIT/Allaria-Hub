@@ -77,4 +77,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ chatId, model, connectors, llmMessages, confirmations }),
     }),
+
+  // Projects
+  getProjects: () => request('/api/projects'),
+
+  getProject: (id) => request(`/api/projects/${id}`),
+
+  deleteProject: (id) =>
+    request(`/api/projects/${id}`, { method: 'DELETE' }),
+
+  stopProject: (id) =>
+    request(`/api/projects/${id}/stop`, { method: 'POST' }),
 }
