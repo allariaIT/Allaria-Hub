@@ -2,6 +2,7 @@ import { gmailListMessages, gmailReadMessage, gmailSendMessage, gmailSearchMessa
 import { calendarListEvents, calendarCreateEvent, calendarSearchEvents } from './calendar.js'
 import { tasksListAll, tasksCreate, tasksComplete, tasksSearch } from './gtasks.js'
 import { driveListFiles, driveSearchFiles, driveGetFile } from './drive.js'
+import { SANDBOX_TOOL_DEFINITIONS, executeSandboxTool } from './sandbox-tools.js'
 
 // Tools que requieren confirmación del usuario antes de ejecutarse
 export const CONFIRMABLE_TOOLS = new Set([
@@ -9,6 +10,8 @@ export const CONFIRMABLE_TOOLS = new Set([
   'calendar_create',
   'tasks_create',
   'tasks_complete',
+  'sandbox_create_project',
+  'sandbox_push',
 ])
 
 export const TOOL_DEFINITIONS = {
@@ -186,6 +189,8 @@ export const TOOL_DEFINITIONS = {
     },
   ],
 
+  sandbox: SANDBOX_TOOL_DEFINITIONS,
+
   drive: [
     {
       type: 'function',
@@ -283,6 +288,16 @@ export async function executeTool(toolCall, userId) {
       return await driveSearchFiles(userId, args.query, Math.min(args.maxResults || 5, 10))
     case 'drive_get':
       return await driveGetFile(userId, args.fileId)
+
+    // Sandbox
+    case 'sandbox_create_project':
+    case 'sandbox_write_file':
+    case 'sandbox_read_file':
+    case 'sandbox_list_files':
+    case 'sandbox_build':
+    case 'sandbox_push':
+    case 'sandbox_status':
+      return await executeSandboxTool(name, args, userId)
 
     default:
       return { error: `Tool desconocida: ${name}` }
