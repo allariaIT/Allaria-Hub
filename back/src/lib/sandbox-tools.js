@@ -150,12 +150,21 @@ export async function executeSandboxTool(name, args, userId) {
 
       // 4. Actualizar DB
       const previewUrl = `${PREVIEW_BASE}/${userSlug}/${args.name}/`
+      // Crear chat dedicado si no existe
+      let chatId = project.chatId
+      if (!chatId) {
+        const chat = await prisma.chat.create({
+          data: { title: `🚧 ${args.title}`, userId },
+        })
+        chatId = chat.id
+      }
       await prisma.project.update({
         where: { id: project.id },
         data: {
           port: result.port,
           previewUrl,
           status: 'running',
+          chatId,
         },
       })
 
