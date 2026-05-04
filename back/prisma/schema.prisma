@@ -16,6 +16,7 @@ model User {
   updatedAt   DateTime         @updatedAt
   chats       Chat[]
   connections UserConnection[]
+  projects    Project[]
 }
 
 model Chat {
@@ -55,5 +56,25 @@ model UserConnection {
   updatedAt    DateTime  @updatedAt
 
   @@unique([userId, provider])
+  @@index([userId])
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String            // "dashboard-ventas" (slug)
+  title       String            // "Dashboard de Ventas"
+  description String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  gitlabId    Int?              // ID del repo en GitLab
+  repoUrl     String?           // URL del repo
+  port        Int?              // Puerto asignado
+  status      String   @default("creating") // creating, running, stopped, error
+  previewUrl  String?           // URL completa de preview
+  template    String   @default("vite-react")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, name])
   @@index([userId])
 }
