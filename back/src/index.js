@@ -5,6 +5,7 @@ import { chatRouter } from './routes/chats.js'
 import { proxyRouter } from './routes/proxy.js'
 import { authenticate } from './middleware/auth.js'
 import { connectorRouter } from './routes/connectors.js'
+import { projectsRouter } from './routes/projects.js'
 
 const app = express()
 const PORT = process.env.PORT || 3098
@@ -30,6 +31,7 @@ app.use('/api/connectors', (req, res, next) => {
 // Protected
 app.use('/api/chats', authenticate, chatRouter)
 app.use('/api/chat', authenticate, proxyRouter)
+app.use('/api/projects', authenticate, projectsRouter)
 
 app.listen(PORT, () => {
   console.log(`[Allaria Hub API] Running on port ${PORT}`)
