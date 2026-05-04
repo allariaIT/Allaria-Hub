@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Home from './pages/Home'
 import Chat from './pages/Chat'
 import Projects from './pages/Projects'
+import ProjectWorkspace from './pages/ProjectWorkspace'
 import Docs from './pages/Docs'
 import './App.css'
 
@@ -18,6 +19,7 @@ function App() {
           <Route index element={<Home />} />
           <Route path="chat" element={<Chat />} />
           <Route path="proyectos" element={<Projects />} />
+          <Route path="proyectos/:id" element={<ProjectWorkspace />} />
           <Route path="docs" element={<Docs />} />
         </Route>
       </Routes>
