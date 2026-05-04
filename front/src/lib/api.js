@@ -80,12 +80,10 @@ export const api = {
 
   // Projects
   getProjects: () => request('/api/projects'),
-
   getProject: (id) => request(`/api/projects/${id}`),
-
-  deleteProject: (id) =>
-    request(`/api/projects/${id}`, { method: 'DELETE' }),
-
-  stopProject: (id) =>
-    request(`/api/projects/${id}/stop`, { method: 'POST' }),
+  createProject: (data) => request('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
+  updateProject: (id, data) => request(`/api/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteProject: (id) => request(`/api/projects/${id}`, { method: 'DELETE' }),
+  stopProject: (id) => request(`/api/projects/${id}/stop`, { method: 'POST' }),
+  getProjectChat: (id) => request(`/api/projects/${id}/chat`),
 }

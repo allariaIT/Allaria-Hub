@@ -1,141 +1,297 @@
-// front/src/pages/Projects.jsx
 import { useState, useEffect } from 'react'
-import { ExternalLink, Trash2, GitBranch, Square, Loader2 } from 'lucide-react'
-import { api } from '../lib/api'
+import { Search, Star, Calendar, ArrowUpRight, Plus, Loader2, ExternalLink, GitBranch, Square, Trash2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { projects as communityProjects } from '../data/mockData'
+import { api } from '../lib/api'
 import './Projects.css'
 
-const STATUS_COLORS = {
-  running: '#22c55e',
-  stopped: '#ef4444',
-  creating: '#eab308',
-  error: '#ef4444',
+const STATUS_LABELS = { running: 'Activo', stopped: 'Detenido', creating: 'Creando...', error: 'Error' }
+const STATUS_COLORS = { running: '#22c55e', stopped: '#888', creating: '#eab308', error: '#ef4444' }
+
+const communityStatusColors = {
+  'Producción': 'tag-green',
+  'En desarrollo': 'tag-navy',
+  'Beta': 'tag-gold',
 }
 
 export default function Projects() {
-  const [projects, setProjects] = useState([])
-  const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+  const [myProjects, setMyProjects] = useState([])
+  const [loadingMy, setLoadingMy] = useState(true)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [form, setForm] = useState({ name: '', title: '', description: '' })
+
+  // Hub filters
+  const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState('Todos')
+  const statuses = ['Todos', ...new Set(communityProjects.map(p => p.status))]
 
   useEffect(() => {
     api.getProjects()
-      .then(setProjects)
+      .then(setMyProjects)
       .catch(console.error)
-      .finally(() => setLoading(false))
+      .finally(() => setLoadingMy(false))
   }, [])
 
-  const handleDelete = async (id) => {
-    if (!confirm('Eliminar este proyecto? Se borrara el container, el repo y los archivos.')) return
+  const filtered = communityProjects.filter(p => {
+    const matchSearch =
+      p.title.toLowerCase().includes(search.toLowerCase()) ||
+      p.author.toLowerCase().includes(search.toLowerCase()) ||
+      p.description.toLowerCase().includes(search.toLowerCase()) ||
+      p.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))
+    const matchStatus = filterStatus === 'Todos' || p.status === filterStatus
+    return matchSearch && matchStatus
+  })
+
+  const handleCreate = async (e) => {
+    e.preventDefault()
+    setCreating(true)
+    setCreateError('')
+    try {
+      const project = await api.createProject(form)
+      setMyProjects(prev => [project, ...prev])
+      setShowCreateModal(false)
+      setForm({ name: '', title: '', description: '' })
+      navigate(`/proyectos/${project.id}`)
+    } catch (err) {
+      setCreateError(err.message)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleDelete = async (e, id) => {
+    e.stopPropagation()
+    if (!confirm('¿Eliminar este proyecto? Se borrará el container, el repo y los archivos.')) return
     try {
       await api.deleteProject(id)
-      setProjects(prev => prev.filter(p => p.id !== id))
+      setMyProjects(prev => prev.filter(p => p.id !== id))
     } catch (err) {
       alert('Error: ' + err.message)
     }
   }
 
-  const handleStop = async (id) => {
+  const handleStop = async (e, id) => {
+    e.stopPropagation()
     try {
       await api.stopProject(id)
-      setProjects(prev => prev.map(p =>
-        p.id === id ? { ...p, status: 'stopped' } : p
-      ))
+      setMyProjects(prev => prev.map(p => p.id === id ? { ...p, status: 'stopped' } : p))
     } catch (err) {
       alert('Error: ' + err.message)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="projects-page">
-        <div className="projects-loading">
-          <Loader2 size={24} className="spin" />
-        </div>
-      </div>
-    )
+  // Auto-generate name slug from title
+  const handleTitleChange = (title) => {
+    setForm(f => ({
+      ...f,
+      title,
+      name: title.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .slice(0, 40),
+    }))
   }
 
   return (
-    <div className="projects-page">
-      <div className="projects-header">
-        <h1>Mis Proyectos</h1>
-        <p>Proyectos creados desde el chat con Sandbox</p>
-      </div>
-
-      {projects.length === 0 ? (
-        <div className="projects-empty">
-          <p>No tenes proyectos todavia.</p>
-          <p>Activa el conector <strong>Sandbox</strong> en el chat y pedi que te cree uno.</p>
-          <button className="btn btn-primary" onClick={() => navigate('/chat')}>
-            Ir al Chat
+    <>
+      {/* MIS PROYECTOS */}
+      <div className="page-header">
+        <div className="page-header-row">
+          <div>
+            <h2>Mis Proyectos</h2>
+            <p>Proyectos web creados con el Sandbox de IA</p>
+          </div>
+          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+            <Plus size={16} />
+            Crear Proyecto
           </button>
         </div>
-      ) : (
-        <div className="projects-grid">
-          {projects.map(project => (
-            <div key={project.id} className="project-card">
-              <div className="project-card-header">
-                <h3>{project.title}</h3>
-                <span
-                  className="project-status-badge"
-                  style={{ '--status-color': STATUS_COLORS[project.status] || '#888' }}
-                >
-                  {project.status}
-                </span>
-              </div>
+      </div>
 
-              {project.description && (
-                <p className="project-card-desc">{project.description}</p>
-              )}
-
-              <div className="project-card-meta">
-                <span className="project-card-slug">{project.name}</span>
-                <span className="project-card-template">{project.template}</span>
-              </div>
-
-              <div className="project-card-actions">
-                {project.previewUrl && (
-                  <a
-                    href={project.previewUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="project-btn preview"
+      <div className="page-content" style={{ paddingBottom: 0 }}>
+        {loadingMy ? (
+          <div className="my-projects-loading"><Loader2 size={20} className="spin-icon" /></div>
+        ) : myProjects.length === 0 ? (
+          <div className="my-projects-empty">
+            <p>No tenés proyectos todavía. Creá uno con el botón de arriba.</p>
+          </div>
+        ) : (
+          <div className="my-projects-grid">
+            {myProjects.map(project => (
+              <div
+                key={project.id}
+                className="my-project-card"
+                onClick={() => navigate(`/proyectos/${project.id}`)}
+              >
+                <div className="my-project-card-top">
+                  <div className="my-project-avatar">{project.title.slice(0, 2).toUpperCase()}</div>
+                  <div className="my-project-info">
+                    <span className="my-project-title">{project.title}</span>
+                    <span className="my-project-slug">{project.name}</span>
+                  </div>
+                  <span
+                    className="my-project-status"
+                    style={{ '--sc': STATUS_COLORS[project.status] || '#888' }}
                   >
-                    <ExternalLink size={14} />
-                    Preview
-                  </a>
-                )}
-                {project.repoUrl && (
-                  <a
-                    href={project.repoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="project-btn repo"
-                  >
-                    <GitBranch size={14} />
-                    GitLab
-                  </a>
-                )}
-                {project.status === 'running' && (
-                  <button
-                    className="project-btn stop"
-                    onClick={() => handleStop(project.id)}
-                  >
-                    <Square size={14} />
-                    Detener
+                    {STATUS_LABELS[project.status] || project.status}
+                  </span>
+                </div>
+                {project.description && <p className="my-project-desc">{project.description}</p>}
+                <div className="my-project-actions" onClick={e => e.stopPropagation()}>
+                  {project.previewUrl && (
+                    <a href={project.previewUrl} target="_blank" rel="noopener noreferrer" className="my-project-btn">
+                      <ExternalLink size={13} /> Preview
+                    </a>
+                  )}
+                  {project.repoUrl && (
+                    <a href={project.repoUrl} target="_blank" rel="noopener noreferrer" className="my-project-btn">
+                      <GitBranch size={13} /> GitLab
+                    </a>
+                  )}
+                  {project.status === 'running' && (
+                    <button className="my-project-btn stop" onClick={(e) => handleStop(e, project.id)}>
+                      <Square size={13} /> Detener
+                    </button>
+                  )}
+                  <button className="my-project-btn delete" onClick={(e) => handleDelete(e, project.id)}>
+                    <Trash2 size={13} />
                   </button>
-                )}
-                <button
-                  className="project-btn delete"
-                  onClick={() => handleDelete(project.id)}
-                >
-                  <Trash2 size={14} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* HUB DE PROYECTOS */}
+      <div className="page-header" style={{ marginTop: '2rem' }}>
+        <div className="page-header-row">
+          <div>
+            <h2>Hub de Proyectos</h2>
+            <p>Todos los proyectos del equipo de desarrollo</p>
+          </div>
+          <div className="projects-count">
+            <span className="count-number">{filtered.length}</span>
+            <span className="count-label">proyectos</span>
+          </div>
+        </div>
+        <div className="projects-toolbar">
+          <div className="search-box">
+            <Search size={16} />
+            <input
+              type="text"
+              placeholder="Buscar por título, autor, tecnología..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="filter-pills">
+            {statuses.map(s => (
+              <button key={s} className={`filter-pill ${filterStatus === s ? 'active' : ''}`} onClick={() => setFilterStatus(s)}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="page-content">
+        <div className="projects-grid">
+          {filtered.map((project, i) => (
+            <div key={project.id} className="project-card" style={{ animationDelay: `${i * 60}ms` }}>
+              <div className="project-card-header">
+                <div className="project-avatar">{project.avatar}</div>
+                <div className="project-meta">
+                  <h3>{project.title}</h3>
+                  <span className="project-author">{project.author}</span>
+                </div>
+                <button className="project-open" title="Abrir proyecto">
+                  <ArrowUpRight size={16} />
                 </button>
+              </div>
+              <p className="project-desc">{project.description}</p>
+              <div className="project-tags">
+                {project.tags.map(tag => (
+                  <span key={tag} className="project-tag">{tag}</span>
+                ))}
+              </div>
+              <div className="project-footer">
+                <span className={`tag ${communityStatusColors[project.status] || 'tag-navy'}`}>{project.status}</span>
+                <div className="project-stats">
+                  <span className="project-stat"><Star size={13} />{project.stars}</span>
+                  <span className="project-stat"><Calendar size={13} />{project.updatedAt}</span>
+                </div>
               </div>
             </div>
           ))}
         </div>
+        {filtered.length === 0 && (
+          <div className="empty-state">
+            <Search size={40} />
+            <h3>Sin resultados</h3>
+            <p>No se encontraron proyectos con esos criterios.</p>
+          </div>
+        )}
+      </div>
+
+      {/* MODAL CREAR PROYECTO */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Crear Proyecto</h3>
+              <button className="modal-close" onClick={() => setShowCreateModal(false)}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleCreate} className="modal-form">
+              <label>
+                <span>Título</span>
+                <input
+                  type="text"
+                  placeholder="Mi Dashboard de Ventas"
+                  value={form.title}
+                  onChange={e => handleTitleChange(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </label>
+              <label>
+                <span>Nombre del proyecto (slug)</span>
+                <input
+                  type="text"
+                  placeholder="mi-dashboard-ventas"
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  required
+                  pattern="[a-z0-9-]+"
+                />
+                <span className="modal-hint">Solo letras minúsculas, números y guiones</span>
+              </label>
+              <label>
+                <span>Descripción (opcional)</span>
+                <textarea
+                  placeholder="Panel con métricas en tiempo real..."
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                />
+              </label>
+              {createError && <div className="modal-error">{createError}</div>}
+              <div className="modal-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowCreateModal(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={creating}>
+                  {creating ? <><Loader2 size={14} className="spin-icon" /> Creando...</> : 'Crear Proyecto'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   )
 }
