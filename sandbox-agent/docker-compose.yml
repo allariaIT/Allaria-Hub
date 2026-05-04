@@ -1,0 +1,29 @@
+# sandbox-agent/docker-compose.yml
+version: '3.8'
+
+services:
+  sandbox-agent:
+    build: .
+    container_name: sandbox-agent
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /projects:/projects
+      - /etc/nginx/conf.d:/etc/nginx/conf.d
+    env_file: .env
+    environment:
+      - PROJECTS_DIR=/projects
+      - NGINX_CONFIG_PATH=/etc/nginx/conf.d/sandbox-projects.conf
+
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: sandbox-nginx
+    restart: unless-stopped
+    ports:
+      - "3099:3099"
+    volumes:
+      - /etc/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - sandbox-agent
