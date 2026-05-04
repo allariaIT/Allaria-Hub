@@ -1,122 +1,141 @@
-import { useState } from 'react'
-import { Search, Star, Calendar, ArrowUpRight } from 'lucide-react'
-import { projects } from '../data/mockData'
+// front/src/pages/Projects.jsx
+import { useState, useEffect } from 'react'
+import { ExternalLink, Trash2, GitBranch, Square, Loader2 } from 'lucide-react'
+import { api } from '../lib/api'
+import { useNavigate } from 'react-router-dom'
 import './Projects.css'
 
-const statusColors = {
-  'Producción': 'tag-green',
-  'En desarrollo': 'tag-navy',
-  'Beta': 'tag-gold',
+const STATUS_COLORS = {
+  running: '#22c55e',
+  stopped: '#ef4444',
+  creating: '#eab308',
+  error: '#ef4444',
 }
 
 export default function Projects() {
-  const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState('Todos')
+  const [projects, setProjects] = useState([])
+  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
 
-  const statuses = ['Todos', ...new Set(projects.map(p => p.status))]
+  useEffect(() => {
+    api.getProjects()
+      .then(setProjects)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
 
-  const filtered = projects.filter(p => {
-    const matchSearch =
-      p.title.toLowerCase().includes(search.toLowerCase()) ||
-      p.author.toLowerCase().includes(search.toLowerCase()) ||
-      p.description.toLowerCase().includes(search.toLowerCase()) ||
-      p.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))
-    const matchStatus = filterStatus === 'Todos' || p.status === filterStatus
-    return matchSearch && matchStatus
-  })
+  const handleDelete = async (id) => {
+    if (!confirm('Eliminar este proyecto? Se borrara el container, el repo y los archivos.')) return
+    try {
+      await api.deleteProject(id)
+      setProjects(prev => prev.filter(p => p.id !== id))
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
+  }
 
-  return (
-    <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <h2>Hub de Proyectos</h2>
-            <p>Todos los proyectos del equipo de desarrollo</p>
-          </div>
-          <div className="projects-count">
-            <span className="count-number">{filtered.length}</span>
-            <span className="count-label">proyectos</span>
-          </div>
-        </div>
+  const handleStop = async (id) => {
+    try {
+      await api.stopProject(id)
+      setProjects(prev => prev.map(p =>
+        p.id === id ? { ...p, status: 'stopped' } : p
+      ))
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
+  }
 
-        <div className="projects-toolbar">
-          <div className="search-box">
-            <Search size={16} />
-            <input
-              type="text"
-              placeholder="Buscar por título, autor, tecnología..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="filter-pills">
-            {statuses.map(s => (
-              <button
-                key={s}
-                className={`filter-pill ${filterStatus === s ? 'active' : ''}`}
-                onClick={() => setFilterStatus(s)}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+  if (loading) {
+    return (
+      <div className="projects-page">
+        <div className="projects-loading">
+          <Loader2 size={24} className="spin" />
         </div>
       </div>
+    )
+  }
 
-      <div className="page-content">
+  return (
+    <div className="projects-page">
+      <div className="projects-header">
+        <h1>Mis Proyectos</h1>
+        <p>Proyectos creados desde el chat con Sandbox</p>
+      </div>
+
+      {projects.length === 0 ? (
+        <div className="projects-empty">
+          <p>No tenes proyectos todavia.</p>
+          <p>Activa el conector <strong>Sandbox</strong> en el chat y pedi que te cree uno.</p>
+          <button className="btn btn-primary" onClick={() => navigate('/chat')}>
+            Ir al Chat
+          </button>
+        </div>
+      ) : (
         <div className="projects-grid">
-          {filtered.map((project, i) => (
-            <div
-              key={project.id}
-              className="project-card"
-              style={{ animationDelay: `${i * 60}ms` }}
-            >
+          {projects.map(project => (
+            <div key={project.id} className="project-card">
               <div className="project-card-header">
-                <div className="project-avatar">{project.avatar}</div>
-                <div className="project-meta">
-                  <h3>{project.title}</h3>
-                  <span className="project-author">{project.author}</span>
-                </div>
-                <button className="project-open" title="Abrir proyecto">
-                  <ArrowUpRight size={16} />
-                </button>
-              </div>
-
-              <p className="project-desc">{project.description}</p>
-
-              <div className="project-tags">
-                {project.tags.map(tag => (
-                  <span key={tag} className="project-tag">{tag}</span>
-                ))}
-              </div>
-
-              <div className="project-footer">
-                <span className={`tag ${statusColors[project.status] || 'tag-navy'}`}>
+                <h3>{project.title}</h3>
+                <span
+                  className="project-status-badge"
+                  style={{ '--status-color': STATUS_COLORS[project.status] || '#888' }}
+                >
                   {project.status}
                 </span>
-                <div className="project-stats">
-                  <span className="project-stat">
-                    <Star size={13} />
-                    {project.stars}
-                  </span>
-                  <span className="project-stat">
-                    <Calendar size={13} />
-                    {project.updatedAt}
-                  </span>
-                </div>
+              </div>
+
+              {project.description && (
+                <p className="project-card-desc">{project.description}</p>
+              )}
+
+              <div className="project-card-meta">
+                <span className="project-card-slug">{project.name}</span>
+                <span className="project-card-template">{project.template}</span>
+              </div>
+
+              <div className="project-card-actions">
+                {project.previewUrl && (
+                  <a
+                    href={project.previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="project-btn preview"
+                  >
+                    <ExternalLink size={14} />
+                    Preview
+                  </a>
+                )}
+                {project.repoUrl && (
+                  <a
+                    href={project.repoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="project-btn repo"
+                  >
+                    <GitBranch size={14} />
+                    GitLab
+                  </a>
+                )}
+                {project.status === 'running' && (
+                  <button
+                    className="project-btn stop"
+                    onClick={() => handleStop(project.id)}
+                  >
+                    <Square size={14} />
+                    Detener
+                  </button>
+                )}
+                <button
+                  className="project-btn delete"
+                  onClick={() => handleDelete(project.id)}
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
             </div>
           ))}
         </div>
-
-        {filtered.length === 0 && (
-          <div className="empty-state">
-            <Search size={40} />
-            <h3>Sin resultados</h3>
-            <p>No se encontraron proyectos con esos criterios.</p>
-          </div>
-        )}
-      </div>
-    </>
+      )}
+    </div>
   )
 }
