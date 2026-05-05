@@ -1,5 +1,4 @@
 # sandbox-agent/docker-compose.yml
-version: '3.8'
 
 services:
   sandbox-agent:
@@ -16,6 +15,8 @@ services:
     environment:
       - PROJECTS_DIR=/projects
       - NGINX_CONFIG_PATH=/etc/nginx/conf.d/sandbox-projects.conf
+    networks:
+      - red-docker
 
   nginx-proxy:
     image: nginx:alpine
@@ -27,3 +28,9 @@ services:
       - /etc/nginx/conf.d:/etc/nginx/conf.d:ro
     depends_on:
       - sandbox-agent
+    networks:
+      - red-docker
+
+networks:
+  red-docker:
+    external: true
