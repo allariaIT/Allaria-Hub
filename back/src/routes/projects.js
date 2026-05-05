@@ -77,6 +77,16 @@ projectsRouter.post('/', async (req, res) => {
   }
 })
 
+// GET /api/projects/community - All projects from all users (hub)
+projectsRouter.get('/community', async (req, res) => {
+  const projects = await prisma.project.findMany({
+    where: { status: { in: ['running', 'stopped'] } },
+    orderBy: { createdAt: 'desc' },
+    include: { user: { select: { name: true, picture: true } } },
+  })
+  res.json(projects)
+})
+
 // GET /api/projects - List user's projects
 projectsRouter.get('/', async (req, res) => {
   const projects = await prisma.project.findMany({

@@ -1,23 +1,18 @@
 import { useState, useEffect } from 'react'
-import { Search, Star, Calendar, ArrowUpRight, Plus, Loader2, ExternalLink, GitBranch, Square, Trash2, X } from 'lucide-react'
+import { Search, ArrowUpRight, Plus, Loader2, ExternalLink, GitBranch, Square, Trash2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { projects as communityProjects } from '../data/mockData'
 import { api } from '../lib/api'
 import './Projects.css'
 
 const STATUS_LABELS = { running: 'Activo', stopped: 'Detenido', creating: 'Creando...', error: 'Error' }
 const STATUS_COLORS = { running: '#22c55e', stopped: '#888', creating: '#eab308', error: '#ef4444' }
 
-const communityStatusColors = {
-  'Producción': 'tag-green',
-  'En desarrollo': 'tag-navy',
-  'Beta': 'tag-gold',
-}
-
 export default function Projects() {
   const navigate = useNavigate()
   const [myProjects, setMyProjects] = useState([])
+  const [communityProjects, setCommunityProjects] = useState([])
   const [loadingMy, setLoadingMy] = useState(true)
+  const [loadingCommunity, setLoadingCommunity] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -25,24 +20,27 @@ export default function Projects() {
 
   // Hub filters
   const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState('Todos')
-  const statuses = ['Todos', ...new Set(communityProjects.map(p => p.status))]
 
   useEffect(() => {
     api.getProjects()
       .then(setMyProjects)
       .catch(console.error)
       .finally(() => setLoadingMy(false))
+    api.getCommunityProjects()
+      .then(setCommunityProjects)
+      .catch(console.error)
+      .finally(() => setLoadingCommunity(false))
   }, [])
 
   const filtered = communityProjects.filter(p => {
-    const matchSearch =
-      p.title.toLowerCase().includes(search.toLowerCase()) ||
-      p.author.toLowerCase().includes(search.toLowerCase()) ||
-      p.description.toLowerCase().includes(search.toLowerCase()) ||
-      p.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))
-    const matchStatus = filterStatus === 'Todos' || p.status === filterStatus
-    return matchSearch && matchStatus
+    if (!search) return true
+    const q = search.toLowerCase()
+    return (
+      p.title.toLowerCase().includes(q) ||
+      p.user?.name?.toLowerCase().includes(q) ||
+      p.description?.toLowerCase().includes(q) ||
+      p.name.toLowerCase().includes(q)
+    )
   })
 
   const handleCreate = async (e) => {
@@ -172,7 +170,7 @@ export default function Projects() {
         <div className="page-header-row">
           <div>
             <h2>Hub de Proyectos</h2>
-            <p>Todos los proyectos del equipo de desarrollo</p>
+            <p>Proyectos creados por el equipo con Sandbox IA</p>
           </div>
           <div className="projects-count">
             <span className="count-number">{filtered.length}</span>
@@ -184,57 +182,62 @@ export default function Projects() {
             <Search size={16} />
             <input
               type="text"
-              placeholder="Buscar por título, autor, tecnología..."
+              placeholder="Buscar por título, autor..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-          </div>
-          <div className="filter-pills">
-            {statuses.map(s => (
-              <button key={s} className={`filter-pill ${filterStatus === s ? 'active' : ''}`} onClick={() => setFilterStatus(s)}>
-                {s}
-              </button>
-            ))}
           </div>
         </div>
       </div>
 
       <div className="page-content">
-        <div className="projects-grid">
-          {filtered.map((project, i) => (
-            <div key={project.id} className="project-card" style={{ animationDelay: `${i * 60}ms` }}>
-              <div className="project-card-header">
-                <div className="project-avatar">{project.avatar}</div>
-                <div className="project-meta">
-                  <h3>{project.title}</h3>
-                  <span className="project-author">{project.author}</span>
+        {loadingCommunity ? (
+          <div className="my-projects-loading"><Loader2 size={20} className="spin-icon" /></div>
+        ) : (
+          <>
+            <div className="projects-grid">
+              {filtered.map((project, i) => (
+                <div
+                  key={project.id}
+                  className="project-card"
+                  style={{ animationDelay: `${i * 60}ms`, cursor: project.previewUrl ? 'pointer' : 'default' }}
+                  onClick={() => project.previewUrl && window.open(project.previewUrl, '_blank')}
+                >
+                  <div className="project-card-header">
+                    <div className="project-avatar">{project.title.slice(0, 2).toUpperCase()}</div>
+                    <div className="project-meta">
+                      <h3>{project.title}</h3>
+                      <span className="project-author">{project.user?.name || '—'}</span>
+                    </div>
+                    {project.previewUrl && (
+                      <button className="project-open" title="Ver preview">
+                        <ArrowUpRight size={16} />
+                      </button>
+                    )}
+                  </div>
+                  {project.description && <p className="project-desc">{project.description}</p>}
+                  <div className="project-footer">
+                    <span
+                      className="my-project-status"
+                      style={{ '--sc': STATUS_COLORS[project.status] || '#888' }}
+                    >
+                      {STATUS_LABELS[project.status] || project.status}
+                    </span>
+                    <span className="project-stat" style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                      {new Date(project.createdAt).toLocaleDateString('es-AR')}
+                    </span>
+                  </div>
                 </div>
-                <button className="project-open" title="Abrir proyecto">
-                  <ArrowUpRight size={16} />
-                </button>
-              </div>
-              <p className="project-desc">{project.description}</p>
-              <div className="project-tags">
-                {project.tags.map(tag => (
-                  <span key={tag} className="project-tag">{tag}</span>
-                ))}
-              </div>
-              <div className="project-footer">
-                <span className={`tag ${communityStatusColors[project.status] || 'tag-navy'}`}>{project.status}</span>
-                <div className="project-stats">
-                  <span className="project-stat"><Star size={13} />{project.stars}</span>
-                  <span className="project-stat"><Calendar size={13} />{project.updatedAt}</span>
-                </div>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
-        {filtered.length === 0 && (
-          <div className="empty-state">
-            <Search size={40} />
-            <h3>Sin resultados</h3>
-            <p>No se encontraron proyectos con esos criterios.</p>
-          </div>
+            {filtered.length === 0 && (
+              <div className="empty-state">
+                <Search size={40} />
+                <h3>{search ? 'Sin resultados' : 'Todavía no hay proyectos'}</h3>
+                <p>{search ? 'No se encontraron proyectos con esos criterios.' : 'Sé el primero en crear uno.'}</p>
+              </div>
+            )}
+          </>
         )}
       </div>
 

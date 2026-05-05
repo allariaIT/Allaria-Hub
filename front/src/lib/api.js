@@ -79,6 +79,7 @@ export const api = {
     }),
 
   // Projects
+  getCommunityProjects: () => request('/api/projects/community'),
   getProjects: () => request('/api/projects'),
   getProject: (id) => request(`/api/projects/${id}`),
   createProject: (data) => request('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
