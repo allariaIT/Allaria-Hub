@@ -68,7 +68,7 @@ projectsRouter.post('/', async (req, res) => {
     await runContainer(containerName(userSlug, name), imgTag, port)
 
     // 6. Update nginx
-    writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
+    await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
 
     // 7. Initial git push
     gitCommitAndPush(projectDir, 'Initial scaffold')
@@ -186,6 +186,18 @@ projectsRouter.get('/:user/:name/tree', (req, res) => {
   res.json(walk(projectDir))
 })
 
+// Verifica que el container responde HTTP 200, reintenta hasta maxAttempts veces
+async function waitForContainer(port, maxAttempts = 10, delayMs = 2000) {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const res = await fetch(`http://localhost:${port}/`, { signal: AbortSignal.timeout(3000) })
+      if (res.ok) return { ok: true }
+    } catch {}
+    await new Promise(r => setTimeout(r, delayMs))
+  }
+  return { ok: false, error: `El container no respondió después de ${maxAttempts} intentos` }
+}
+
 // POST /projects/:user/:name/build - Rebuild container
 projectsRouter.post('/:user/:name/build', async (req, res) => {
   try {
@@ -200,7 +212,12 @@ projectsRouter.post('/:user/:name/build', async (req, res) => {
     const imgTag = imageName(user, name)
     await buildImage(projectDir, imgTag)
     await runContainer(containerName(user, name), imgTag, meta.port)
-    writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
+    await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
+
+    const check = await waitForContainer(meta.port)
+    if (!check.ok) {
+      return res.status(500).json({ error: check.error })
+    }
 
     res.json({ ok: true, port: meta.port })
   } catch (err) {

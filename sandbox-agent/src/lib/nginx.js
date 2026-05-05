@@ -14,6 +14,11 @@ export function generateNginxConfig(projects) {
   return `server {
     listen 3099;
 
+    location = / {
+        return 200 'ok';
+        add_header Content-Type text/plain;
+    }
+
 ${locations}
 }
 `
