@@ -6,7 +6,7 @@ import {
   sandboxListFiles, sandboxBuild, sandboxPush, sandboxStatus,
 } from './sandbox-client.js'
 
-const PREVIEW_BASE = process.env.SANDBOX_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz:3099'
+const PREVIEW_BASE = process.env.SANDBOX_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz'
 
 function userSlugFromEmail(email) {
   // juan.perez@allaria.com -> juan-perez

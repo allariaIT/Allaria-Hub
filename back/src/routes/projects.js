@@ -56,7 +56,7 @@ projectsRouter.post('/', async (req, res) => {
     try {
       const result = await sandboxCreateProject(userSlug, name, title, gitHttpUrl)
       port = result.port
-      const PREVIEW_BASE = process.env.SANDBOX_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz:3099'
+      const PREVIEW_BASE = process.env.SANDBOX_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz'
       previewUrl = `${PREVIEW_BASE}/${userSlug}/${name}/`
     } catch (err) {
       console.error('Sandbox agent error:', err.message)
