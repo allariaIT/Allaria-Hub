@@ -35,7 +35,13 @@ const TOOL_LABELS = {
 const STATUS_COLORS = { running: '#22c55e', stopped: '#888', creating: '#eab308', error: '#ef4444' }
 const STATUS_LABELS = { running: 'Activo', stopped: 'Detenido', creating: 'Creando...', error: 'Error' }
 
-const DEFAULT_MODEL = 'gemini/gemini-2.5-flash'
+const MODELS = [
+  { id: 'gemini/gemini-2.5-flash', label: 'Gemini Flash', logo: 'https://www.google.com/s2/favicons?sz=64&domain=gemini.google.com' },
+  { id: 'gemini/gemini-2.5-pro',   label: 'Gemini Pro',   logo: 'https://www.google.com/s2/favicons?sz=64&domain=gemini.google.com' },
+  { id: 'openai/gpt-4-turbo',      label: 'GPT-4 Turbo',  logo: 'https://www.google.com/s2/favicons?sz=64&domain=openai.com' },
+  { id: 'openai/gpt-4o',           label: 'GPT-4o',        logo: 'https://www.google.com/s2/favicons?sz=64&domain=openai.com' },
+  { id: 'claude-sonnet-4-5',       label: 'Claude Sonnet', logo: 'https://www.google.com/s2/favicons?sz=64&domain=claude.ai' },
+]
 const CONNECTORS = ['sandbox']
 
 function ConfirmationCard({ conf }) {
@@ -87,6 +93,7 @@ export default function ProjectWorkspace() {
 
   // Chat state
   const [input, setInput] = useState('')
+  const [selectedModel, setSelectedModel] = useState(MODELS[0].id)
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState(null)
   const [pendingConfirmation, setPendingConfirmation] = useState(null)
@@ -159,7 +166,7 @@ export default function ProjectWorkspace() {
           .map(m => ({ role: m.role, content: m.content })),
       ]
 
-      const data = await api.sendMessage(chat.id, DEFAULT_MODEL, apiMessages, CONNECTORS)
+      const data = await api.sendMessage(chat.id, selectedModel, apiMessages, CONNECTORS)
 
       if (data._pendingConfirmations) {
         setPendingConfirmation({
@@ -398,6 +405,16 @@ export default function ProjectWorkspace() {
           </div>
 
           <div className="pw-input-area">
+            <select
+              className="pw-model-select"
+              value={selectedModel}
+              onChange={e => setSelectedModel(e.target.value)}
+              disabled={sending || !!pendingConfirmation}
+            >
+              {MODELS.map(m => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
             <textarea
               ref={inputRef}
               value={input}

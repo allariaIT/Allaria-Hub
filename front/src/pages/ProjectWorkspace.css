@@ -402,6 +402,25 @@
   flex-shrink: 0;
 }
 
+.pw-model-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-end;
+  flex-shrink: 0;
+  transition: border-color var(--transition-fast);
+}
+
+.pw-model-select:focus {
+  outline: none;
+  border-color: var(--allaria-navy);
+}
+
 .pw-input-area textarea {
   flex: 1;
   padding: 10px 14px;
