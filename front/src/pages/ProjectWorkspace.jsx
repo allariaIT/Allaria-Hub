@@ -21,7 +21,6 @@ REGLAS IMPORTANTES:
 Tools disponibles: sandbox_write_file, sandbox_read_file, sandbox_list_files, sandbox_build, sandbox_push, sandbox_status.`
 
 const DEFAULT_MODEL = 'claude-sonnet-4-5'
-]
 
 const CONNECTORS = ['sandbox']
 
