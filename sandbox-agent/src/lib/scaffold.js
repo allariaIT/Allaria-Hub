@@ -44,7 +44,25 @@ RUN npm run build
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
+`)
+
+  fs.writeFileSync(path.join(projectDir, 'nginx.conf'),
+`server {
+    listen 80;
+
+    location /health {
+        return 200 'ok';
+        add_header Content-Type text/plain;
+    }
+
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+}
 `)
 
   fs.writeFileSync(path.join(projectDir, '.dockerignore'),

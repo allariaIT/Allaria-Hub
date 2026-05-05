@@ -186,16 +186,18 @@ projectsRouter.get('/:user/:name/tree', (req, res) => {
   res.json(walk(projectDir))
 })
 
+const CHECK_HOST = process.env.PROXY_HOST || 'host.docker.internal'
+
 // Verifica que el container responde HTTP 200, reintenta hasta maxAttempts veces
-async function waitForContainer(port, maxAttempts = 10, delayMs = 2000) {
+async function waitForContainer(port, maxAttempts = 15, delayMs = 2000) {
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const res = await fetch(`http://localhost:${port}/`, { signal: AbortSignal.timeout(3000) })
+      const res = await fetch(`http://${CHECK_HOST}:${port}/health`, { signal: AbortSignal.timeout(3000) })
       if (res.ok) return { ok: true }
     } catch {}
     await new Promise(r => setTimeout(r, delayMs))
   }
-  return { ok: false, error: `El container no respondió después de ${maxAttempts} intentos` }
+  return { ok: false, error: `El container no respondió en /health después de ${maxAttempts} intentos (${maxAttempts * delayMs / 1000}s)` }
 }
 
 // POST /projects/:user/:name/build - Rebuild container
