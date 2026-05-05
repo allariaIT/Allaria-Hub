@@ -26,6 +26,8 @@ services:
       - "3099:3099"
     volumes:
       - /etc/nginx/conf.d:/etc/nginx/conf.d:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - sandbox-agent
     networks:
