@@ -3,10 +3,16 @@ import { prisma } from '../lib/prisma.js'
 
 export const chatRouter = Router()
 
-// GET /api/chats - Listar chats del usuario
+// GET /api/chats - Listar chats del usuario (excluye chats de proyectos sandbox)
 chatRouter.get('/', async (req, res) => {
+  const projectChats = await prisma.project.findMany({
+    where: { userId: req.user.id, chatId: { not: null } },
+    select: { chatId: true },
+  })
+  const excludeIds = projectChats.map(p => p.chatId).filter(Boolean)
+
   const chats = await prisma.chat.findMany({
-    where: { userId: req.user.id },
+    where: { userId: req.user.id, id: { notIn: excludeIds } },
     orderBy: { updatedAt: 'desc' },
     include: {
       messages: {
