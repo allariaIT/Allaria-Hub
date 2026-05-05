@@ -183,18 +183,29 @@ proxyRouter.post('/stream', async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no')
   res.flushHeaders()
 
-  const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`)
+  // Detectar si el cliente sigue conectado sin abortar el procesamiento
+  let clientConnected = true
+  req.on('close', () => { clientConnected = false })
+
+  // Heartbeat cada 15s para evitar timeouts de nginx/browser
+  const heartbeat = setInterval(() => {
+    if (clientConnected) try { res.write(': ping\n\n') } catch {}
+  }, 15000)
+
+  const send = (obj) => {
+    if (clientConnected) try { res.write(`data: ${JSON.stringify(obj)}\n\n`) } catch {}
+  }
 
   try {
     const { chatId, model, messages, connectors = [], temperature = 0.7, max_tokens = 4096 } = req.body
 
     if (!chatId || !messages?.length) {
       send({ type: 'error', message: 'chatId y messages son requeridos' })
-      return res.end()
+      return
     }
 
     const chat = await prisma.chat.findFirst({ where: { id: chatId, userId: req.user.id } })
-    if (!chat) { send({ type: 'error', message: 'Chat no encontrado' }); return res.end() }
+    if (!chat) { send({ type: 'error', message: 'Chat no encontrado' }); return }
 
     const lastUserMsg = messages[messages.length - 1]
     if (lastUserMsg.role === 'user') {
@@ -250,6 +261,7 @@ proxyRouter.post('/stream', async (req, res) => {
     }
 
     const assistantContent = data.choices?.[0]?.message?.content || 'Sin respuesta.'
+    // Siempre guardar en DB aunque el cliente se haya desconectado
     await prisma.message.create({ data: { chatId, role: 'assistant', content: assistantContent, model } })
     await autoTitle(chat, chatId, lastUserMsg, data)
 
@@ -258,7 +270,8 @@ proxyRouter.post('/stream', async (req, res) => {
     console.error('Stream error:', err.message)
     send({ type: 'error', message: err.message })
   } finally {
-    res.end()
+    clearInterval(heartbeat)
+    if (clientConnected) res.end()
   }
 })
 

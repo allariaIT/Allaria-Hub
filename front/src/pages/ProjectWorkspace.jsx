@@ -76,9 +76,9 @@ export default function ProjectWorkspace() {
         setMessages(msgs)
         setTitleDraft(proj.title)
         setDescDraft(proj.description || '')
-        // Si el último mensaje es del usuario, la respuesta se interrumpió
+        // Si el último mensaje es del usuario, el backend puede estar procesando en background
         if (msgs.length > 0 && msgs[msgs.length - 1].role === 'user') {
-          setInterrupted(true)
+          setInterrupted(true) // se muestra "procesando..." hasta que llegue la respuesta
         }
       } catch (err) {
         setError(err.message)
@@ -88,6 +88,23 @@ export default function ProjectWorkspace() {
     }
     load()
   }, [id])
+
+  // Polling: si el último mensaje es del usuario (backend procesando en background), esperar respuesta
+  useEffect(() => {
+    if (!interrupted || sending || !chat) return
+    const interval = setInterval(async () => {
+      try {
+        const chatData = await api.getProjectChat(id)
+        const msgs = chatData.messages || []
+        if (msgs.length > 0 && msgs[msgs.length - 1].role === 'assistant') {
+          setMessages(msgs)
+          setInterrupted(false)
+          clearInterval(interval)
+        }
+      } catch {}
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [interrupted, sending, chat, id])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -335,13 +352,11 @@ export default function ProjectWorkspace() {
               </div>
             ))}
 
-            {/* Interrupted banner */}
+            {/* Interrupted / background processing banner */}
             {interrupted && !sending && (
               <div className="pw-interrupted">
-                <span>La respuesta anterior se interrumpió</span>
-                <button className="pw-retry-btn" onClick={handleRetry}>
-                  <RotateCcw size={13} /> Reintentar
-                </button>
+                <Loader2 size={13} className="pw-spin" />
+                <span>Procesando en segundo plano...</span>
               </div>
             )}
 
