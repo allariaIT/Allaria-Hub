@@ -149,7 +149,7 @@ projectsRouter.post('/:user/:name/files', (req, res) => {
 // GET /projects/:user/:name/files/*filePath - Read file
 projectsRouter.get('/:user/:name/files/*filePath', (req, res) => {
   const { user, name } = req.params
-  const filePath = req.params.filePath
+  const filePath = Array.isArray(req.params.filePath) ? req.params.filePath.join('/') : req.params.filePath
   const projectDir = path.join(PROJECTS_DIR, user, name)
   const resolved = path.resolve(projectDir, filePath)
 
