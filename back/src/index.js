@@ -7,6 +7,7 @@ import { authenticate } from './middleware/auth.js'
 import { connectorRouter } from './routes/connectors.js'
 import { projectsRouter } from './routes/projects.js'
 import { prisma } from './lib/prisma.js'
+import { sandboxStatus } from './lib/sandbox-client.js'
 
 const app = express()
 const PORT = process.env.PORT || 3098
@@ -52,4 +53,39 @@ app.use('/api/projects', authenticate, projectsRouter)
 
 app.listen(PORT, () => {
   console.log(`[Allaria Hub API] Running on port ${PORT}`)
+  reconcileProjects()
 })
+
+// Reconcilia proyectos 'creating' o 'error' chequeando el estado real en el sandbox
+async function reconcileProjects() {
+  const slugFromEmail = (email) => email.split('@')[0].replace(/\./g, '-').toLowerCase()
+
+  try {
+    const stale = await prisma.project.findMany({
+      where: { status: { in: ['creating', 'error'] }, port: { not: null } },
+      include: { user: { select: { email: true } } },
+    })
+
+    if (stale.length > 0) {
+      console.log(`[reconcile] Revisando ${stale.length} proyecto(s) en estado incompleto...`)
+    }
+
+    for (const project of stale) {
+      try {
+        const userSlug = slugFromEmail(project.user.email)
+        const status = await sandboxStatus(userSlug, project.name)
+        if (status.status === 'running') {
+          await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
+          console.log(`[reconcile] ${project.name} → running`)
+        }
+      } catch {
+        // sandbox no tiene el proyecto o no responde — dejar como está
+      }
+    }
+  } catch (err) {
+    console.error('[reconcile] Error:', err.message)
+  }
+
+  // Volver a correr cada 5 minutos
+  setTimeout(reconcileProjects, 5 * 60 * 1000)
+}

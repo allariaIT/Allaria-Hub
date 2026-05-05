@@ -11,6 +11,31 @@ const PROJECTS_DIR = process.env.PROJECTS_DIR || '/projects'
 const NGINX_CONFIG_PATH = process.env.NGINX_CONFIG_PATH || '/etc/nginx/conf.d/sandbox-projects.conf'
 const PORT_START = parseInt(process.env.PORT_RANGE_START || '4001')
 const PORT_END = parseInt(process.env.PORT_RANGE_END || '4100')
+const MAX_CONCURRENT_BUILDS = parseInt(process.env.MAX_CONCURRENT_BUILDS || '3')
+
+// Semáforo para limitar builds concurrentes
+let activeBuilds = 0
+const buildQueue = []
+
+function acquireBuildSlot() {
+  return new Promise((resolve) => {
+    if (activeBuilds < MAX_CONCURRENT_BUILDS) {
+      activeBuilds++
+      resolve()
+    } else {
+      buildQueue.push(resolve)
+    }
+  })
+}
+
+function releaseBuildSlot() {
+  if (buildQueue.length > 0) {
+    const next = buildQueue.shift()
+    next()
+  } else {
+    activeBuilds--
+  }
+}
 
 export const projectsRouter = Router()
 
@@ -66,8 +91,11 @@ projectsRouter.post('/', async (req, res) => {
     // 5. Responder inmediatamente — el build corre en background
     res.json({ ok: true, port, status: 'building', previewUrl: `/${userSlug}/${name}/` })
 
-    // 6. Build en background (no bloquea la respuesta)
+    // 6. Build en background con semáforo (limita builds concurrentes)
+    console.log(`[sandbox] ${userSlug}/${name} encolado (activos: ${activeBuilds}/${MAX_CONCURRENT_BUILDS})`)
     ;(async () => {
+      await acquireBuildSlot()
+      console.log(`[sandbox] ${userSlug}/${name} build iniciado (activos: ${activeBuilds}/${MAX_CONCURRENT_BUILDS})`)
       try {
         const imgTag = imageName(userSlug, name)
         await buildImage(projectDir, imgTag)
@@ -82,6 +110,8 @@ projectsRouter.post('/', async (req, res) => {
       } catch (err) {
         console.error(`[sandbox] ${userSlug}/${name} build error:`, err.message)
         fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: err.message }, null, 2))
+      } finally {
+        releaseBuildSlot()
       }
     })()
   } catch (err) {
@@ -221,14 +251,19 @@ projectsRouter.post('/:user/:name/build', async (req, res) => {
     }
     const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'))
 
-    const imgTag = imageName(user, name)
-    await buildImage(projectDir, imgTag)
-    await runContainer(containerName(user, name), imgTag, meta.port)
-    await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
+    await acquireBuildSlot()
+    try {
+      const imgTag = imageName(user, name)
+      await buildImage(projectDir, imgTag)
+      await runContainer(containerName(user, name), imgTag, meta.port)
+      await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
 
-    const check = await waitForContainer(meta.port)
-    if (!check.ok) {
-      return res.status(500).json({ error: check.error })
+      const check = await waitForContainer(meta.port)
+      if (!check.ok) {
+        return res.status(500).json({ error: check.error })
+      }
+    } finally {
+      releaseBuildSlot()
     }
 
     res.json({ ok: true, port: meta.port })
