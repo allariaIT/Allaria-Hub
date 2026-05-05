@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ExternalLink, GitBranch, Pencil, Check, X,
   Send, Bot, User, Copy, CheckCheck, Loader2, Code, GitBranch as GitPush,
-  ShieldAlert, Square
+  ShieldAlert, RotateCcw
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { api } from '../lib/api'
@@ -12,29 +12,6 @@ import './ProjectWorkspace.css'
 
 const SANDBOX_SYSTEM_PROMPT = 'Sos el asistente de desarrollo de este proyecto web. Tenés acceso al sandbox: podés crear y modificar archivos con sandbox_write_file, leer archivos con sandbox_read_file, ver la estructura con sandbox_list_files, y buildear con sandbox_build para que el usuario vea los cambios en la preview. Después de modificar archivos, SIEMPRE llamá sandbox_build. Podés pushear a GitLab con sandbox_push cuando el usuario lo pida.'
 
-const TOOL_ICONS = {
-  sandbox_create_project: Code,
-  sandbox_write_file: Code,
-  sandbox_read_file: Code,
-  sandbox_list_files: Code,
-  sandbox_build: Code,
-  sandbox_push: GitPush,
-  sandbox_status: Code,
-}
-
-const TOOL_LABELS = {
-  sandbox_create_project: 'Crear proyecto',
-  sandbox_write_file: 'Escribir archivo',
-  sandbox_read_file: 'Leer archivo',
-  sandbox_list_files: 'Listar archivos',
-  sandbox_build: 'Buildear proyecto',
-  sandbox_push: 'Push a GitLab',
-  sandbox_status: 'Estado del proyecto',
-}
-
-const STATUS_COLORS = { running: '#22c55e', stopped: '#888', creating: '#eab308', error: '#ef4444' }
-const STATUS_LABELS = { running: 'Activo', stopped: 'Detenido', creating: 'Creando...', error: 'Error' }
-
 const MODELS = [
   { id: 'gemini/gemini-2.5-flash', label: 'Gemini Flash', logo: 'https://www.google.com/s2/favicons?sz=64&domain=gemini.google.com' },
   { id: 'gemini/gemini-2.5-pro',   label: 'Gemini Pro',   logo: 'https://www.google.com/s2/favicons?sz=64&domain=gemini.google.com' },
@@ -42,64 +19,47 @@ const MODELS = [
   { id: 'openai/gpt-4o',           label: 'GPT-4o',        logo: 'https://www.google.com/s2/favicons?sz=64&domain=openai.com' },
   { id: 'claude-sonnet-4-5',       label: 'Claude Sonnet', logo: 'https://www.google.com/s2/favicons?sz=64&domain=claude.ai' },
 ]
+
 const CONNECTORS = ['sandbox']
 
-function ConfirmationCard({ conf }) {
-  const Icon = TOOL_ICONS[conf.toolName] || ShieldAlert
-  const label = TOOL_LABELS[conf.toolName] || conf.toolName
-  return (
-    <div className="pw-confirm-card">
-      <div className="pw-confirm-header">
-        <Icon size={14} />
-        <span>{label}</span>
-      </div>
-      <div className="pw-confirm-body">
-        {conf.toolName === 'sandbox_write_file' && (
-          <div className="pw-confirm-field"><strong>Archivo:</strong> {conf.args.filePath}</div>
-        )}
-        {conf.toolName === 'sandbox_push' && (
-          <>
-            <div className="pw-confirm-field"><strong>Proyecto:</strong> {conf.args.projectName}</div>
-            <div className="pw-confirm-field"><strong>Commit:</strong> {conf.args.message}</div>
-          </>
-        )}
-        {conf.toolName === 'sandbox_create_project' && (
-          <>
-            <div className="pw-confirm-field"><strong>Nombre:</strong> {conf.args.name}</div>
-            <div className="pw-confirm-field"><strong>Título:</strong> {conf.args.title}</div>
-          </>
-        )}
-      </div>
-    </div>
-  )
+const TOOL_PROGRESS = {
+  sandbox_write_file:    (a) => `Escribiendo ${a.filePath || 'archivo'}`,
+  sandbox_read_file:     (a) => `Leyendo ${a.filePath || 'archivo'}`,
+  sandbox_list_files:    ()  => 'Listando archivos',
+  sandbox_build:         ()  => 'Buildeando proyecto...',
+  sandbox_push:          (a) => `Push: "${a.message || ''}"`,
+  sandbox_status:        ()  => 'Revisando estado',
+  sandbox_create_project:(a) => `Creando proyecto "${a.name || ''}"`,
 }
+
+const STATUS_COLORS = { running: '#22c55e', stopped: '#888', creating: '#eab308', error: '#ef4444' }
+const STATUS_LABELS  = { running: 'Activo', stopped: 'Detenido', creating: 'Creando...', error: 'Error' }
 
 export default function ProjectWorkspace() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const [project, setProject] = useState(null)
-  const [chat, setChat] = useState(null)
+  const [project, setProject]   = useState(null)
+  const [chat, setChat]         = useState(null)
   const [messages, setMessages] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState('')
+  const [interrupted, setInterrupted] = useState(false)
 
-  // Edit project info
   const [editingTitle, setEditingTitle] = useState(false)
-  const [editingDesc, setEditingDesc] = useState(false)
-  const [titleDraft, setTitleDraft] = useState('')
-  const [descDraft, setDescDraft] = useState('')
+  const [editingDesc, setEditingDesc]   = useState(false)
+  const [titleDraft, setTitleDraft]     = useState('')
+  const [descDraft, setDescDraft]       = useState('')
 
-  // Chat state
-  const [input, setInput] = useState('')
+  const [input, setInput]               = useState('')
   const [selectedModel, setSelectedModel] = useState(MODELS[0].id)
-  const [sending, setSending] = useState(false)
-  const [copied, setCopied] = useState(null)
-  const [pendingConfirmation, setPendingConfirmation] = useState(null)
+  const [sending, setSending]           = useState(false)
+  const [progress, setProgress]         = useState([])
+  const [copied, setCopied]             = useState(null)
 
   const messagesEndRef = useRef(null)
-  const inputRef = useRef(null)
+  const inputRef       = useRef(null)
 
   useEffect(() => {
     async function load() {
@@ -110,9 +70,14 @@ export default function ProjectWorkspace() {
         ])
         setProject(proj)
         setChat(chatData)
-        setMessages(chatData.messages || [])
+        const msgs = chatData.messages || []
+        setMessages(msgs)
         setTitleDraft(proj.title)
         setDescDraft(proj.description || '')
+        // Si el último mensaje es del usuario, la respuesta se interrumpió
+        if (msgs.length > 0 && msgs[msgs.length - 1].role === 'user') {
+          setInterrupted(true)
+        }
       } catch (err) {
         setError(err.message)
       } finally {
@@ -124,7 +89,7 @@ export default function ProjectWorkspace() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, sending])
+  }, [messages, sending, progress])
 
   const saveTitle = async () => {
     if (!titleDraft.trim()) return
@@ -148,14 +113,18 @@ export default function ProjectWorkspace() {
     return `${SANDBOX_SYSTEM_PROMPT} El proyecto activo es "${projectName}". Cuando uses las tools de sandbox, el projectName es siempre "${projectName}".`
   }
 
-  const sendMessage = async () => {
-    if (!input.trim() || !chat) return
-    setSending(true)
+  const doSend = async (overrideInput) => {
+    const text = (overrideInput ?? input).trim()
+    if (!text || !chat) return
 
-    const userMsg = { role: 'user', content: input.trim() }
+    setSending(true)
+    setProgress([])
+    setInterrupted(false)
+
+    const userMsg = { role: 'user', content: text }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
-    setInput('')
+    if (!overrideInput) setInput('')
 
     try {
       const systemMsg = { role: 'system', content: buildSystemPrompt() }
@@ -166,66 +135,70 @@ export default function ProjectWorkspace() {
           .map(m => ({ role: m.role, content: m.content })),
       ]
 
-      const data = await api.sendMessage(chat.id, selectedModel, apiMessages, CONNECTORS)
+      const response = await api.streamMessage(chat.id, selectedModel, apiMessages, CONNECTORS)
 
-      if (data._pendingConfirmations) {
-        setPendingConfirmation({
-          confirmations: data._pendingConfirmations,
-          llmMessages: data._llmMessages,
-          model: data._model,
-          connectors: data._connectors,
-          chatId: data._chatId,
-        })
-        setSending(false)
-        return
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Error del servidor' }))
+        throw new Error(err.error || 'Error del servidor')
       }
 
-      const assistantMsg = { role: 'assistant', content: data.choices?.[0]?.message?.content || '' }
-      setMessages(prev => [...prev, assistantMsg])
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop()
+
+        for (const part of parts) {
+          if (!part.startsWith('data: ')) continue
+          let event
+          try { event = JSON.parse(part.slice(6)) } catch { continue }
+
+          if (event.type === 'tool_start') {
+            const label = TOOL_PROGRESS[event.name]?.(event.args) ?? event.name
+            setProgress(prev => [...prev, { id: `${event.name}-${Date.now()}`, label, status: 'running' }])
+          } else if (event.type === 'tool_done') {
+            // Marcar el último en running como done
+            setProgress(prev => {
+              const idx = [...prev].reverse().findIndex(p => p.status === 'running')
+              if (idx === -1) return prev
+              const realIdx = prev.length - 1 - idx
+              return prev.map((p, i) => i === realIdx ? { ...p, status: 'done' } : p)
+            })
+          } else if (event.type === 'done') {
+            setMessages(prev => [...prev, { role: 'assistant', content: event.content }])
+            setProgress([])
+          } else if (event.type === 'error') {
+            setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${event.message}` }])
+            setProgress([])
+          }
+        }
+      }
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }])
     } finally {
       setSending(false)
-    }
-  }
-
-  const handleConfirm = async (approved) => {
-    if (!pendingConfirmation) return
-    setSending(true)
-    const { confirmations, llmMessages, model, connectors, chatId } = pendingConfirmation
-    setPendingConfirmation(null)
-
-    try {
-      const data = await api.confirmAction(
-        chatId, model, connectors, llmMessages,
-        confirmations.map(c => ({ ...c, approved }))
-      )
-
-      if (data._pendingConfirmations) {
-        setPendingConfirmation({
-          confirmations: data._pendingConfirmations,
-          llmMessages: data._llmMessages,
-          model: data._model,
-          connectors: data._connectors,
-          chatId: data._chatId,
-        })
-        return
-      }
-
-      const assistantMsg = { role: 'assistant', content: data.choices?.[0]?.message?.content || '' }
-      setMessages(prev => [...prev, assistantMsg])
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }])
-    } finally {
-      setSending(false)
+      setProgress([])
     }
   }
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      sendMessage()
+      doSend()
     }
+  }
+
+  const handleRetry = () => {
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
+    if (!lastUserMsg) return
+    const lastIdx = messages.lastIndexOf(lastUserMsg)
+    setMessages(prev => prev.slice(0, lastIdx))
+    doSend(lastUserMsg.content)
   }
 
   const copyMsg = (text, idx) => {
@@ -235,9 +208,7 @@ export default function ProjectWorkspace() {
   }
 
   if (loading) return (
-    <div className="pw-loading">
-      <Loader2 size={24} className="pw-spin" />
-    </div>
+    <div className="pw-loading"><Loader2 size={24} className="pw-spin" /></div>
   )
 
   if (error) return (
@@ -294,15 +265,10 @@ export default function ProjectWorkspace() {
         {/* SIDEBAR */}
         <aside className="pw-sidebar">
           <div className="pw-sidebar-section">
-            <h4>Descripcion</h4>
+            <h4>Descripción</h4>
             {editingDesc ? (
               <div className="pw-desc-edit">
-                <textarea
-                  value={descDraft}
-                  onChange={e => setDescDraft(e.target.value)}
-                  rows={4}
-                  autoFocus
-                />
+                <textarea value={descDraft} onChange={e => setDescDraft(e.target.value)} rows={4} autoFocus />
                 <div className="pw-desc-edit-actions">
                   <button className="btn-sm" onClick={saveDesc}><Check size={12} /> Guardar</button>
                   <button className="btn-sm ghost" onClick={() => setEditingDesc(false)}>Cancelar</button>
@@ -310,7 +276,7 @@ export default function ProjectWorkspace() {
               </div>
             ) : (
               <p className="pw-desc-text" onClick={() => setEditingDesc(true)}>
-                {project.description || <span className="pw-desc-empty">+ Agregar descripcion</span>}
+                {project.description || <span className="pw-desc-empty">+ Agregar descripción</span>}
                 <Pencil size={11} className="pw-edit-icon" />
               </p>
             )}
@@ -318,20 +284,9 @@ export default function ProjectWorkspace() {
 
           <div className="pw-sidebar-section">
             <h4>Detalles</h4>
-            <div className="pw-detail-row">
-              <span>Slug</span>
-              <code>{project.name}</code>
-            </div>
-            <div className="pw-detail-row">
-              <span>Template</span>
-              <code>{project.template}</code>
-            </div>
-            {project.port && (
-              <div className="pw-detail-row">
-                <span>Puerto</span>
-                <code>{project.port}</code>
-              </div>
-            )}
+            <div className="pw-detail-row"><span>Slug</span><code>{project.name}</code></div>
+            <div className="pw-detail-row"><span>Template</span><code>{project.template}</code></div>
+            {project.port && <div className="pw-detail-row"><span>Puerto</span><code>{project.port}</code></div>}
             <div className="pw-detail-row">
               <span>Creado</span>
               <span>{new Date(project.createdAt).toLocaleDateString('es-AR')}</span>
@@ -354,9 +309,10 @@ export default function ProjectWorkspace() {
             {messages.length === 0 && (
               <div className="pw-welcome">
                 <Bot size={32} />
-                <p>Hola, soy tu asistente para este proyecto. Puedo crear y modificar archivos, buildear la preview y pushear a GitLab. En que empezamos?</p>
+                <p>Hola, soy tu asistente para este proyecto. Puedo crear y modificar archivos, buildear la preview y pushear a GitLab. ¿En qué empezamos?</p>
               </div>
             )}
+
             {messages.map((msg, i) => (
               <div key={i} className={`pw-msg pw-msg-${msg.role}`}>
                 <div className="pw-msg-avatar">
@@ -377,19 +333,25 @@ export default function ProjectWorkspace() {
               </div>
             ))}
 
-            {pendingConfirmation && (
-              <div className="pw-pending">
-                <div className="pw-pending-header">
-                  <ShieldAlert size={16} />
-                  <span>Accion que requiere confirmacion</span>
-                </div>
-                {pendingConfirmation.confirmations.map((conf, i) => (
-                  <ConfirmationCard key={i} conf={conf} />
+            {/* Interrupted banner */}
+            {interrupted && !sending && (
+              <div className="pw-interrupted">
+                <span>La respuesta anterior se interrumpió</span>
+                <button className="pw-retry-btn" onClick={handleRetry}>
+                  <RotateCcw size={13} /> Reintentar
+                </button>
+              </div>
+            )}
+
+            {/* Progress updates */}
+            {progress.length > 0 && (
+              <div className="pw-progress-list">
+                {progress.map(p => (
+                  <div key={p.id} className={`pw-progress-item pw-progress-${p.status}`}>
+                    {p.status === 'running' ? <Loader2 size={12} className="pw-spin" /> : <Check size={12} />}
+                    <span>{p.label}</span>
+                  </div>
                 ))}
-                <div className="pw-pending-actions">
-                  <button className="btn btn-primary" onClick={() => handleConfirm(true)}>Confirmar</button>
-                  <button className="btn btn-ghost" onClick={() => handleConfirm(false)}>Cancelar</button>
-                </div>
               </div>
             )}
 
@@ -409,7 +371,7 @@ export default function ProjectWorkspace() {
               className="pw-model-select"
               value={selectedModel}
               onChange={e => setSelectedModel(e.target.value)}
-              disabled={sending || !!pendingConfirmation}
+              disabled={sending}
             >
               {MODELS.map(m => (
                 <option key={m.id} value={m.id}>{m.label}</option>
@@ -420,14 +382,14 @@ export default function ProjectWorkspace() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Pedile a la IA que cree archivos, modifique codigo, buildee..."
+              placeholder="Pedile a la IA que cree archivos, modifique código, buildee..."
               rows={1}
-              disabled={sending || !!pendingConfirmation}
+              disabled={sending}
             />
             <button
               className="pw-send-btn"
-              onClick={sendMessage}
-              disabled={!input.trim() || sending || !!pendingConfirmation}
+              onClick={() => doSend()}
+              disabled={!input.trim() || sending}
             >
               <Send size={16} />
             </button>

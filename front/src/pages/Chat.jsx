@@ -725,7 +725,7 @@ export default function Chat() {
             <button
               className="chat-attach-btn"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading}
+              disabled={isLoading || !!pendingConfirmation}
               title="Adjuntar archivo"
             >
               <Paperclip size={18} />
@@ -737,12 +737,12 @@ export default function Chat() {
               onKeyDown={handleKeyDown}
               placeholder="Escribí tu mensaje..."
               rows={1}
-              disabled={isLoading}
+              disabled={isLoading || !!pendingConfirmation}
             />
             <button
               className="chat-send-btn"
               onClick={sendMessage}
-              disabled={(!input.trim() && !attachments.length) || isLoading}
+              disabled={(!input.trim() && !attachments.length) || isLoading || !!pendingConfirmation}
             >
               <Send size={18} />
             </button>

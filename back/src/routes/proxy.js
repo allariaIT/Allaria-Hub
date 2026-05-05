@@ -175,6 +175,93 @@ proxyRouter.post('/completions', async (req, res) => {
   }
 })
 
+// POST /api/chat/stream - Streaming SSE con progreso de tools (para project workspace)
+proxyRouter.post('/stream', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders()
+
+  const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`)
+
+  try {
+    const { chatId, model, messages, connectors = [], temperature = 0.7, max_tokens = 4096 } = req.body
+
+    if (!chatId || !messages?.length) {
+      send({ type: 'error', message: 'chatId y messages son requeridos' })
+      return res.end()
+    }
+
+    const chat = await prisma.chat.findFirst({ where: { id: chatId, userId: req.user.id } })
+    if (!chat) { send({ type: 'error', message: 'Chat no encontrado' }); return res.end() }
+
+    const lastUserMsg = messages[messages.length - 1]
+    if (lastUserMsg.role === 'user') {
+      await prisma.message.create({
+        data: { chatId, role: 'user', content: extractTextForDb(lastUserMsg.content) },
+      })
+    }
+
+    const tools = getToolsForConnectors(connectors)
+
+    const now = new Date().toLocaleString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      dateStyle: 'full',
+      timeStyle: 'short',
+    })
+    const systemContext = { role: 'system', content: `Fecha y hora actual en Buenos Aires: ${now}.` }
+    let llmMessages = [systemContext, ...messages]
+
+    send({ type: 'thinking' })
+
+    let data = await callLiteLLM({
+      model, messages: llmMessages, temperature, max_tokens,
+      user: req.user.email,
+      ...(tools.length > 0 ? { tools } : {}),
+    })
+
+    let rounds = 0
+    while (data.choices?.[0]?.message?.tool_calls?.length > 0 && rounds < MAX_TOOL_ROUNDS) {
+      const assistantMsg = data.choices[0].message
+      llmMessages.push(assistantMsg)
+
+      for (const toolCall of assistantMsg.tool_calls) {
+        const toolName = toolCall.function.name
+        let args = {}
+        try { args = JSON.parse(toolCall.function.arguments) } catch {}
+
+        send({ type: 'tool_start', name: toolName, args })
+
+        let result
+        try { result = await executeTool(toolCall, req.user.id) }
+        catch (err) { result = { error: err.message } }
+
+        send({ type: 'tool_done', name: toolName, result })
+        llmMessages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) })
+      }
+
+      send({ type: 'thinking' })
+      data = await callLiteLLM({
+        model, messages: llmMessages, temperature, max_tokens,
+        user: req.user.email, tools,
+      })
+      rounds++
+    }
+
+    const assistantContent = data.choices?.[0]?.message?.content || 'Sin respuesta.'
+    await prisma.message.create({ data: { chatId, role: 'assistant', content: assistantContent, model } })
+    await autoTitle(chat, chatId, lastUserMsg, data)
+
+    send({ type: 'done', content: assistantContent })
+  } catch (err) {
+    console.error('Stream error:', err.message)
+    send({ type: 'error', message: err.message })
+  } finally {
+    res.end()
+  }
+})
+
 // POST /api/chat/confirm - Confirmar o rechazar acciones pendientes
 proxyRouter.post('/confirm', async (req, res) => {
   try {

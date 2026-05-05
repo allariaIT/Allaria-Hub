@@ -78,6 +78,18 @@ export const api = {
       body: JSON.stringify({ chatId, model, connectors, llmMessages, confirmations }),
     }),
 
+  streamMessage: (chatId, model, messages, connectors = []) => {
+    const token = getToken()
+    return fetch(`${API_URL}/api/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ chatId, model, messages, connectors }),
+    })
+  },
+
   // Projects
   getCommunityProjects: () => request('/api/projects/community'),
   getProjects: () => request('/api/projects'),
