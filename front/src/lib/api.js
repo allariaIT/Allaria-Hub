@@ -34,6 +34,8 @@ export const api = {
       body: JSON.stringify({ credential }),
     }),
 
+  getStats: () => request('/api/stats'),
+
   getChats: () => request('/api/chats'),
 
   createChat: (title) =>

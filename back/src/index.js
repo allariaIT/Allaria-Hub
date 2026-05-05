@@ -6,6 +6,7 @@ import { proxyRouter } from './routes/proxy.js'
 import { authenticate } from './middleware/auth.js'
 import { connectorRouter } from './routes/connectors.js'
 import { projectsRouter } from './routes/projects.js'
+import { prisma } from './lib/prisma.js'
 
 const app = express()
 const PORT = process.env.PORT || 3098
@@ -27,6 +28,22 @@ app.use('/api/connectors', (req, res, next) => {
   if (req.path === '/callback') return next()
   authenticate(req, res, next)
 }, connectorRouter)
+
+// Stats del dashboard
+app.get('/api/stats', authenticate, async (req, res) => {
+  const startOfMonth = new Date()
+  startOfMonth.setDate(1)
+  startOfMonth.setHours(0, 0, 0, 0)
+
+  const [activeProjects, totalUsers, chatsThisMonth, totalMessages] = await Promise.all([
+    prisma.project.count({ where: { status: 'running' } }),
+    prisma.user.count(),
+    prisma.chat.count({ where: { createdAt: { gte: startOfMonth } } }),
+    prisma.message.count(),
+  ])
+
+  res.json({ activeProjects, totalUsers, chatsThisMonth, totalMessages })
+})
 
 // Protected
 app.use('/api/chats', authenticate, chatRouter)

@@ -1,11 +1,23 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { MessageSquare, FolderKanban, BookOpen, ArrowRight, TrendingUp, Users, Rocket, Activity } from 'lucide-react'
-import { stats } from '../data/mockData'
+import { api } from '../lib/api'
 import './Home.css'
 
-const statIcons = [Rocket, Users, TrendingUp, Activity]
+const STAT_CONFIG = [
+  { key: 'activeProjects', label: 'Proyectos activos',  icon: Rocket,   format: v => v },
+  { key: 'totalUsers',     label: 'Usuarios',            icon: Users,    format: v => v },
+  { key: 'chatsThisMonth', label: 'Chats este mes',      icon: Activity, format: v => v },
+  { key: 'totalMessages',  label: 'Mensajes totales',    icon: TrendingUp, format: v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v },
+]
 
 export default function Home() {
+  const [stats, setStats] = useState(null)
+
+  useEffect(() => {
+    api.getStats().catch(() => null).then(setStats)
+  }, [])
+
   return (
     <>
       {/* Hero */}
@@ -45,16 +57,14 @@ export default function Home() {
 
       {/* Stats */}
       <section className="home-stats">
-        {stats.map((stat, i) => {
-          const Icon = statIcons[i]
+        {STAT_CONFIG.map((cfg, i) => {
+          const Icon = cfg.icon
+          const value = stats ? cfg.format(stats[cfg.key]) : '—'
           return (
-            <div key={stat.label} className="stat-card" style={{ animationDelay: `${i * 80}ms` }}>
-              <div className="stat-icon">
-                <Icon size={20} />
-              </div>
-              <div className="stat-value">{stat.value}</div>
-              <div className="stat-label">{stat.label}</div>
-              <div className="stat-change">{stat.change}</div>
+            <div key={cfg.label} className="stat-card" style={{ animationDelay: `${i * 80}ms` }}>
+              <div className="stat-icon"><Icon size={20} /></div>
+              <div className="stat-value">{value}</div>
+              <div className="stat-label">{cfg.label}</div>
             </div>
           )
         })}
