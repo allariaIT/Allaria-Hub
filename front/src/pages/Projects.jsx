@@ -32,6 +32,18 @@ export default function Projects() {
       .finally(() => setLoadingCommunity(false))
   }, [])
 
+  // Polling: si hay proyectos en 'creating', refrescar cada 5s hasta que cambien
+  useEffect(() => {
+    const hasCreating = myProjects.some(p => p.status === 'creating')
+    if (!hasCreating) return
+    const interval = setInterval(() => {
+      api.getProjects().then(fresh => {
+        setMyProjects(fresh)
+      }).catch(() => {})
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [myProjects])
+
   const filtered = communityProjects.filter(p => {
     if (!search) return true
     const q = search.toLowerCase()
@@ -138,6 +150,7 @@ export default function Projects() {
                     className="my-project-status"
                     style={{ '--sc': STATUS_COLORS[project.status] || '#888' }}
                   >
+                    {project.status === 'creating' && <Loader2 size={11} className="spin-icon" style={{ marginRight: 4 }} />}
                     {STATUS_LABELS[project.status] || project.status}
                   </span>
                 </div>

@@ -51,26 +51,50 @@ projectsRouter.post('/', async (req, res) => {
       data: { title: `🚧 ${title}`, userId: req.user.id },
     })
 
-    // 4. Llamar al sandbox agent
-    let port = null, previewUrl = null
+    const PREVIEW_BASE = process.env.SANDBOX_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz'
+    const previewUrl = `${PREVIEW_BASE}/${userSlug}/${name}/`
+
+    // 4. Llamar al sandbox agent (ahora devuelve inmediatamente con status: building)
+    let port = null
     try {
       const result = await sandboxCreateProject(userSlug, name, title, gitHttpUrl)
       port = result.port
-      const PREVIEW_BASE = process.env.SANDBOX_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz'
-      previewUrl = `${PREVIEW_BASE}/${userSlug}/${name}/`
     } catch (err) {
       console.error('Sandbox agent error:', err.message)
       await prisma.project.update({ where: { id: project.id }, data: { chatId: chat.id, status: 'error' } })
-      return res.status(502).json({ error: `Error al crear el proyecto en el sandbox: ${err.message}` })
+      return res.status(502).json({ error: `Error al iniciar el sandbox: ${err.message}` })
     }
 
-    // 5. Actualizar proyecto con chatId, port, previewUrl
+    // 5. Actualizar DB con port y chatId — status queda en 'creating' hasta que el build termine
     const updated = await prisma.project.update({
       where: { id: project.id },
-      data: { chatId: chat.id, port, previewUrl, status: 'running' },
+      data: { chatId: chat.id, port, previewUrl, status: 'creating' },
     })
 
+    // 6. Responder al frontend inmediatamente
     res.json(updated)
+
+    // 7. Polling en background: esperar a que el sandbox confirme que está running
+    ;(async () => {
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 6000))
+        try {
+          const status = await sandboxStatus(userSlug, name)
+          if (status.status === 'running') {
+            await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
+            console.log(`[projects] ${name} build completado → running`)
+            return
+          }
+          if (status.status === 'error') {
+            await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
+            return
+          }
+        } catch {}
+      }
+      // Timeout: marcar como error
+      await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } }).catch(() => {})
+      console.error(`[projects] ${name} build timeout`)
+    })()
   } catch (err) {
     console.error('Create project error:', err)
     res.status(500).json({ error: err.message })

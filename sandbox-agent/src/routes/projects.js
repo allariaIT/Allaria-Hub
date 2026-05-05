@@ -58,22 +58,32 @@ projectsRouter.post('/', async (req, res) => {
     const usedPorts = await getUsedPorts()
     const port = findFreePort(usedPorts, PORT_START, PORT_END)
 
-    // 4. Save metadata
-    const meta = { name, title, userSlug, port, repoUrl, createdAt: new Date().toISOString() }
-    fs.writeFileSync(path.join(projectDir, '.sandbox-meta.json'), JSON.stringify(meta, null, 2))
+    // 4. Save metadata with status: building
+    const meta = { name, title, userSlug, port, repoUrl, status: 'building', createdAt: new Date().toISOString() }
+    const metaPath = path.join(projectDir, '.sandbox-meta.json')
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
 
-    // 5. Docker build + run
-    const imgTag = imageName(userSlug, name)
-    await buildImage(projectDir, imgTag)
-    await runContainer(containerName(userSlug, name), imgTag, port)
+    // 5. Responder inmediatamente — el build corre en background
+    res.json({ ok: true, port, status: 'building', previewUrl: `/${userSlug}/${name}/` })
 
-    // 6. Update nginx
-    await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
+    // 6. Build en background (no bloquea la respuesta)
+    ;(async () => {
+      try {
+        const imgTag = imageName(userSlug, name)
+        await buildImage(projectDir, imgTag)
+        await runContainer(containerName(userSlug, name), imgTag, port)
+        await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
+        gitCommitAndPush(projectDir, 'Initial scaffold')
 
-    // 7. Initial git push
-    gitCommitAndPush(projectDir, 'Initial scaffold')
-
-    res.json({ ok: true, port, previewUrl: `/${userSlug}/${name}/` })
+        const check = await waitForContainer(port)
+        const finalStatus = check.ok ? 'running' : 'error'
+        fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: finalStatus }, null, 2))
+        console.log(`[sandbox] ${userSlug}/${name} build: ${finalStatus}`)
+      } catch (err) {
+        console.error(`[sandbox] ${userSlug}/${name} build error:`, err.message)
+        fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: err.message }, null, 2))
+      }
+    })()
   } catch (err) {
     console.error('Create project error:', err)
     res.status(500).json({ error: err.message })
