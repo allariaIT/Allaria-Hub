@@ -402,23 +402,26 @@
   flex-shrink: 0;
 }
 
-.pw-model-select {
-  padding: 6px 10px;
+.pw-model-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
   align-self: flex-end;
   flex-shrink: 0;
-  transition: border-color var(--transition-fast);
+  white-space: nowrap;
 }
 
-.pw-model-select:focus {
-  outline: none;
-  border-color: var(--allaria-navy);
+.pw-model-badge img {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
 }
 
 .pw-input-area textarea {

@@ -10,14 +10,17 @@ import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import './ProjectWorkspace.css'
 
-const SANDBOX_SYSTEM_PROMPT = 'Sos el asistente de desarrollo de este proyecto web. Tenés acceso al sandbox: podés crear y modificar archivos con sandbox_write_file, leer archivos con sandbox_read_file, ver la estructura con sandbox_list_files, y buildear con sandbox_build para que el usuario vea los cambios en la preview. Después de modificar archivos, SIEMPRE llamá sandbox_build. Podés pushear a GitLab con sandbox_push cuando el usuario lo pida.'
+const SANDBOX_SYSTEM_PROMPT = `Sos el asistente de desarrollo de este proyecto web.
 
-const MODELS = [
-  { id: 'gemini/gemini-2.5-flash', label: 'Gemini Flash', logo: 'https://www.google.com/s2/favicons?sz=64&domain=gemini.google.com' },
-  { id: 'gemini/gemini-2.5-pro',   label: 'Gemini Pro',   logo: 'https://www.google.com/s2/favicons?sz=64&domain=gemini.google.com' },
-  { id: 'openai/gpt-4-turbo',      label: 'GPT-4 Turbo',  logo: 'https://www.google.com/s2/favicons?sz=64&domain=openai.com' },
-  { id: 'openai/gpt-4o',           label: 'GPT-4o',        logo: 'https://www.google.com/s2/favicons?sz=64&domain=openai.com' },
-  { id: 'claude-sonnet-4-5',       label: 'Claude Sonnet', logo: 'https://www.google.com/s2/favicons?sz=64&domain=claude.ai' },
+REGLAS IMPORTANTES:
+1. Cuando el usuario te pregunte "¿en qué estábamos?", "¿qué hicimos?", "¿qué hay hasta ahora?" o similar, leé PRIMERO el archivo CHANGELOG.md con sandbox_read_file. NO leas todos los archivos del proyecto ni hagas builds innecesarios.
+2. Cada vez que modifiques archivos, al final SIEMPRE actualizá CHANGELOG.md agregando una entrada con: fecha, qué se cambió y por qué. Usá formato markdown simple.
+3. Después de modificar archivos, SIEMPRE llamá sandbox_build para deployar los cambios.
+4. Para pushear a GitLab usá sandbox_push cuando el usuario lo pida.
+
+Tools disponibles: sandbox_write_file, sandbox_read_file, sandbox_list_files, sandbox_build, sandbox_push, sandbox_status.`
+
+const DEFAULT_MODEL = 'claude-sonnet-4-5'
 ]
 
 const CONNECTORS = ['sandbox']
@@ -53,7 +56,7 @@ export default function ProjectWorkspace() {
   const [descDraft, setDescDraft]       = useState('')
 
   const [input, setInput]               = useState('')
-  const [selectedModel, setSelectedModel] = useState(MODELS[0].id)
+  const [selectedModel] = useState(DEFAULT_MODEL)
   const [sending, setSending]           = useState(false)
   const [progress, setProgress]         = useState([])
   const [copied, setCopied]             = useState(null)
@@ -367,16 +370,10 @@ export default function ProjectWorkspace() {
           </div>
 
           <div className="pw-input-area">
-            <select
-              className="pw-model-select"
-              value={selectedModel}
-              onChange={e => setSelectedModel(e.target.value)}
-              disabled={sending}
-            >
-              {MODELS.map(m => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
+            <span className="pw-model-badge">
+              <img src="https://www.google.com/s2/favicons?sz=64&domain=claude.ai" alt="Claude" />
+              Claude Sonnet
+            </span>
             <textarea
               ref={inputRef}
               value={input}
