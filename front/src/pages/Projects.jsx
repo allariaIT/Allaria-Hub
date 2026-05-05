@@ -52,7 +52,9 @@ export default function Projects() {
       setMyProjects(prev => [project, ...prev])
       setShowCreateModal(false)
       setForm({ name: '', title: '', description: '' })
-      navigate(`/proyectos/${project.id}`)
+      if (project.status === 'running') {
+        navigate(`/proyectos/${project.id}`)
+      }
     } catch (err) {
       setCreateError(err.message)
     } finally {
@@ -122,8 +124,9 @@ export default function Projects() {
             {myProjects.map(project => (
               <div
                 key={project.id}
-                className="my-project-card"
-                onClick={() => navigate(`/proyectos/${project.id}`)}
+                className={`my-project-card ${project.status === 'error' || project.status === 'creating' ? 'my-project-card--disabled' : ''}`}
+                onClick={() => project.status !== 'error' && project.status !== 'creating' && navigate(`/proyectos/${project.id}`)}
+                title={project.status === 'creating' ? 'El proyecto se está creando...' : project.status === 'error' ? 'El proyecto tuvo un error al crearse' : undefined}
               >
                 <div className="my-project-card-top">
                   <div className="my-project-avatar">{project.title.slice(0, 2).toUpperCase()}</div>

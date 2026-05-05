@@ -237,6 +237,31 @@ export default function ProjectWorkspace() {
     </div>
   )
 
+  if (project?.status === 'creating') return (
+    <div className="pw-error">
+      <Loader2 size={32} className="pw-spin" style={{ color: '#eab308' }} />
+      <p style={{ marginTop: '1rem', fontWeight: 600 }}>El proyecto se está creando...</p>
+      <p style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>Esto puede tardar hasta un minuto. Volvé en unos segundos.</p>
+      <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => navigate('/proyectos')}>Volver al hub</button>
+    </div>
+  )
+
+  if (project?.status === 'error') return (
+    <div className="pw-error">
+      <p style={{ fontSize: '2rem' }}>⚠️</p>
+      <p style={{ fontWeight: 600 }}>El proyecto tuvo un error al crearse</p>
+      <p style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>El container no pudo buildear correctamente.</p>
+      <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => navigate('/proyectos')}>Volver al hub</button>
+    </div>
+  )
+
+  if (error) return (
+    <div className="pw-error">
+      <p>{error}</p>
+      <button className="btn btn-primary" onClick={() => navigate('/proyectos')}>Volver</button>
+    </div>
+  )
+
   return (
     <div className="pw-root">
       {/* TOP BAR */}
