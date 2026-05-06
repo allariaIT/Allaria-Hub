@@ -175,8 +175,9 @@ export async function executeSandboxTool(name, args, userId) {
         const result = await sandboxCreateProject(userSlug, args.name, args.title, repoUrl)
         port = result.port
       } catch (err) {
-        // Rollback DB + GitLab
+        // Rollback DB + Chat + GitLab
         await prisma.project.delete({ where: { id: project.id } }).catch(() => {})
+        if (chatId) await prisma.chat.delete({ where: { id: chatId } }).catch(() => {})
         try { await deleteGitlabRepo(gitlabId) } catch {}
         throw new Error(`Error al iniciar el sandbox: ${err.message}`)
       }
