@@ -1,6 +1,6 @@
 // back/src/lib/sandbox-tools.js
 import { prisma } from './prisma.js'
-import { createGitlabRepo } from './gitlab.js'
+import { createGitlabRepo, deleteGitlabRepo } from './gitlab.js'
 import {
   sandboxCreateProject, sandboxWriteFile, sandboxReadFile,
   sandboxListFiles, sandboxBuild, sandboxPush, sandboxStatus,
@@ -129,28 +129,38 @@ export async function executeSandboxTool(name, args, userId) {
   switch (name) {
     case 'sandbox_create_project': {
       // 1. Crear repo en GitLab
-      const { gitlabId, repoUrl, webUrl } = await createGitlabRepo(userSlug, args.name)
+      let gitlabId, repoUrl, webUrl
+      try {
+        const gitlab = await createGitlabRepo(userSlug, args.name)
+        gitlabId = gitlab.gitlabId
+        repoUrl = gitlab.repoUrl
+        webUrl = gitlab.webUrl
+      } catch (err) {
+        throw new Error(`Error creando repo en GitLab: ${err.message}`)
+      }
 
       // 2. Crear en DB
-      const project = await prisma.project.create({
-        data: {
-          name: args.name,
-          title: args.title,
-          description: args.description || null,
-          userId,
-          gitlabId,
-          repoUrl: webUrl,
-          status: 'creating',
-          template: 'vite-react',
-        },
-      })
+      let project
+      try {
+        project = await prisma.project.create({
+          data: {
+            name: args.name,
+            title: args.title,
+            description: args.description || null,
+            userId,
+            gitlabId,
+            repoUrl: webUrl,
+            status: 'creating',
+            template: 'vite-react',
+          },
+        })
+      } catch (err) {
+        // Rollback GitLab
+        try { await deleteGitlabRepo(gitlabId) } catch {}
+        throw err
+      }
 
-      // 3. Crear en Sandbox Agent
-      const result = await sandboxCreateProject(userSlug, args.name, args.title, repoUrl)
-
-      // 4. Actualizar DB
-      const previewUrl = `${PREVIEW_BASE}/${userSlug}/${args.name}/`
-      // Crear chat dedicado si no existe
+      // 3. Crear chat dedicado
       let chatId = project.chatId
       if (!chatId) {
         const chat = await prisma.chat.create({
@@ -158,21 +168,54 @@ export async function executeSandboxTool(name, args, userId) {
         })
         chatId = chat.id
       }
+
+      // 4. Llamar al sandbox agent
+      let port
+      try {
+        const result = await sandboxCreateProject(userSlug, args.name, args.title, repoUrl)
+        port = result.port
+      } catch (err) {
+        // Rollback DB + GitLab
+        await prisma.project.delete({ where: { id: project.id } }).catch(() => {})
+        try { await deleteGitlabRepo(gitlabId) } catch {}
+        throw new Error(`Error al iniciar el sandbox: ${err.message}`)
+      }
+
+      const previewUrl = `${PREVIEW_BASE}/${userSlug}/${args.name}/`
       await prisma.project.update({
         where: { id: project.id },
-        data: {
-          port: result.port,
-          previewUrl,
-          status: 'running',
-          chatId,
-        },
+        data: { port, previewUrl, chatId, status: 'creating' },
       })
 
+      // 5. Polling para esperar que el build termine
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 6000))
+        try {
+          const status = await sandboxStatus(userSlug, args.name)
+          if (status.status === 'running') {
+            await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
+            return {
+              message: `Proyecto "${args.title}" creado exitosamente.`,
+              previewUrl,
+              repoUrl: webUrl,
+              status: 'running',
+            }
+          }
+          if (status.status === 'error') {
+            await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
+            return {
+              message: `Proyecto "${args.title}" tuvo un error al buildear.`,
+              previewUrl,
+              status: 'error',
+            }
+          }
+        } catch {}
+      }
+
+      await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } }).catch(() => {})
       return {
-        message: `Proyecto "${args.title}" creado exitosamente.`,
-        previewUrl,
-        repoUrl: webUrl,
-        status: 'running',
+        message: `Timeout esperando que "${args.title}" esté listo. El proyecto puede estar en error.`,
+        status: 'error',
       }
     }
 
@@ -198,9 +241,29 @@ export async function executeSandboxTool(name, args, userId) {
     case 'sandbox_build': {
       const project = await prisma.project.findFirst({ where: { userId, name: args.projectName } })
       if (!project) throw new Error(`Proyecto "${args.projectName}" no encontrado`)
+
+      // Disparar build (responde inmediatamente ahora)
       await sandboxBuild(userSlug, args.projectName)
-      await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
-      return { ok: true, message: 'Build completado. Preview actualizada.', previewUrl: project.previewUrl }
+
+      // Polling hasta que el sandbox confirme running o error
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 6000))
+        try {
+          const status = await sandboxStatus(userSlug, args.projectName)
+          if (status.status === 'running') {
+            await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
+            return { ok: true, message: 'Build completado. Preview actualizada.', previewUrl: project.previewUrl }
+          }
+          if (status.status === 'error') {
+            await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
+            return { ok: false, message: 'El build falló. Revisá los archivos del proyecto.' }
+          }
+        } catch {}
+      }
+
+      // Timeout después de 20 × 6s = 2 minutos
+      await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
+      return { ok: false, message: 'Timeout esperando el build (2 minutos). El proyecto puede estar en error.' }
     }
 
     case 'sandbox_push': {
