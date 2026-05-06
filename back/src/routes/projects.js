@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
-import { sandboxDelete, sandboxStop } from '../lib/sandbox-client.js'
-import { sandboxCreateProject } from '../lib/sandbox-client.js'
+import { sandboxDelete, sandboxStop, sandboxStatus, sandboxCreateProject } from '../lib/sandbox-client.js'
 import { createGitlabRepo, deleteGitlabRepo } from '../lib/gitlab.js'
 
 export const projectsRouter = Router()
@@ -109,18 +108,14 @@ projectsRouter.get('/community', async (req, res) => {
     include: {
       user: { select: { id: true, name: true, picture: true } },
       _count: { select: { stars: true } },
+      stars: { where: { userId: req.user.id }, select: { id: true } },
     },
   })
 
-  const starred = await prisma.projectStar.findMany({
-    where: { userId: req.user.id, projectId: { in: projects.map(p => p.id) } },
-    select: { projectId: true },
-  })
-  const starredSet = new Set(starred.map(s => s.projectId))
-
   res.json(projects.map(p => ({
     ...p,
-    starredByMe: starredSet.has(p.id),
+    starredByMe: p.stars.length > 0,
+    stars: undefined,
   })))
 })
 
