@@ -1,7 +1,7 @@
-import { execSync } from 'node:child_process'
+import { execSync, spawnSync } from 'node:child_process'
 
 function run(cmd, cwd) {
-  return execSync(cmd, { cwd, stdio: 'pipe' }).toString().trim()
+  return execSync(cmd, { cwd, stdio: 'pipe', timeout: 30000 }).toString().trim()
 }
 
 export function gitInit(projectDir, repoUrl) {
@@ -14,9 +14,14 @@ export function gitInit(projectDir, repoUrl) {
 
 export function gitCommitAndPush(projectDir, message) {
   run('git add -A', projectDir)
-  try {
-    run(`git commit -m "${message.replace(/"/g, '\\"')}"`, projectDir)
-  } catch {
+  // Usar spawnSync con array de args para evitar inyección de shell
+  const commitResult = spawnSync('git', ['commit', '-m', message], {
+    cwd: projectDir,
+    stdio: 'pipe',
+    timeout: 30000,
+    encoding: 'utf-8',
+  })
+  if (commitResult.status !== 0) {
     return { pushed: false, message: 'Nada para commitear' }
   }
   try {
