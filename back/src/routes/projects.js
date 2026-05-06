@@ -212,6 +212,37 @@ projectsRouter.delete('/:id/star', async (req, res) => {
   res.json({ stars: count })
 })
 
+// PATCH /api/projects/:id/publish - Publicar proyecto
+projectsRouter.patch('/:id/publish', async (req, res) => {
+  const project = await prisma.project.findFirst({
+    where: { id: req.params.id, userId: req.user.id },
+  })
+  if (!project) return res.status(404).json({ error: 'Proyecto no encontrado' })
+  if (project.status !== 'running') return res.status(400).json({ error: 'Solo se pueden publicar proyectos activos' })
+
+  const updated = await prisma.project.update({
+    where: { id: project.id },
+    data: { isPublic: true },
+    include: { _count: { select: { stars: true } } },
+  })
+  res.json(updated)
+})
+
+// PATCH /api/projects/:id/unpublish - Despublicar proyecto (las estrellas se conservan)
+projectsRouter.patch('/:id/unpublish', async (req, res) => {
+  const project = await prisma.project.findFirst({
+    where: { id: req.params.id, userId: req.user.id },
+  })
+  if (!project) return res.status(404).json({ error: 'Proyecto no encontrado' })
+
+  const updated = await prisma.project.update({
+    where: { id: project.id },
+    data: { isPublic: false },
+    include: { _count: { select: { stars: true } } },
+  })
+  res.json(updated)
+})
+
 // DELETE /api/projects/:id - Delete project
 projectsRouter.delete('/:id', async (req, res) => {
   const project = await prisma.project.findFirst({
