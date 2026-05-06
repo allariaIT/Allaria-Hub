@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ExternalLink, GitBranch, Pencil, Check, X,
   Send, Bot, User, Copy, CheckCheck, Loader2, Code, GitBranch as GitPush,
-  ShieldAlert, RotateCcw
+  ShieldAlert, RotateCcw, Globe, EyeOff
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { api } from '../lib/api'
@@ -125,6 +125,17 @@ export default function ProjectWorkspace() {
       setProject(updated)
     } catch {}
     setEditingDesc(false)
+  }
+
+  const handlePublishToggle = async () => {
+    try {
+      const updated = project.isPublic
+        ? await api.unpublishProject(id)
+        : await api.publishProject(id)
+      setProject(prev => ({ ...prev, ...updated }))
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   const buildSystemPrompt = () => {
@@ -322,6 +333,30 @@ export default function ProjectWorkspace() {
               <p className="pw-desc-text" onClick={() => setEditingDesc(true)}>
                 {project.description || <span className="pw-desc-empty">+ Agregar descripción</span>}
                 <Pencil size={11} className="pw-edit-icon" />
+              </p>
+            )}
+          </div>
+
+          <div className="pw-sidebar-section">
+            <h4>Visibilidad</h4>
+            {project.status === 'running' ? (
+              <button
+                className={`pw-visibility-btn${project.isPublic ? ' pw-visibility-btn--public' : ''}`}
+                onClick={handlePublishToggle}
+              >
+                {project.isPublic
+                  ? <><EyeOff size={13} /> Despublicar</>
+                  : <><Globe size={13} /> Publicar en el Hub</>
+                }
+              </button>
+            ) : (
+              <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                Solo se pueden publicar proyectos activos
+              </span>
+            )}
+            {project.isPublic && (
+              <p style={{ fontSize: '11px', color: '#22c55e', marginTop: '6px' }}>
+                Visible en el Hub de comunidad
               </p>
             )}
           </div>

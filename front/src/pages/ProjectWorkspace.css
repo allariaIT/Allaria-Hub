@@ -541,6 +541,36 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.pw-visibility-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+.pw-visibility-btn:hover {
+  background: rgba(34, 197, 94, 0.08);
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+.pw-visibility-btn--public {
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+.pw-visibility-btn--public:hover {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
 @media (max-width: 768px) {
   .pw-sidebar { display: none; }
 }
