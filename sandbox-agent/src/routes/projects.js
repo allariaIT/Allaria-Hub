@@ -3,7 +3,7 @@ import { Router } from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
 import { generateScaffold } from '../lib/scaffold.js'
-import { buildImage, runContainer, stopContainer, getUsedPorts, findFreePort, containerName, imageName, getContainerStatus, execInContainer } from '../lib/docker.js'
+import { buildImage, runContainer, stopContainer, getUsedPorts, findFreePort, releaseReservedPort, containerName, imageName, getContainerStatus, execInContainer } from '../lib/docker.js'
 import { writeAndReloadNginx } from '../lib/nginx.js'
 import { gitInit, gitCommitAndPush } from '../lib/git.js'
 
@@ -100,6 +100,7 @@ projectsRouter.post('/', async (req, res) => {
         const imgTag = imageName(userSlug, name)
         await buildImage(projectDir, imgTag)
         await runContainer(containerName(userSlug, name), imgTag, port)
+        releaseReservedPort(port)
         await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
         gitCommitAndPush(projectDir, 'Initial scaffold')
 
@@ -108,6 +109,7 @@ projectsRouter.post('/', async (req, res) => {
         fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: finalStatus }, null, 2))
         console.log(`[sandbox] ${userSlug}/${name} build: ${finalStatus}`)
       } catch (err) {
+        releaseReservedPort(port)
         console.error(`[sandbox] ${userSlug}/${name} build error:`, err.message)
         fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: err.message }, null, 2))
       } finally {
@@ -240,7 +242,7 @@ async function waitForContainer(port, maxAttempts = 15, delayMs = 2000) {
   return { ok: false, error: `El container no respondió en /health después de ${maxAttempts} intentos (${maxAttempts * delayMs / 1000}s)` }
 }
 
-// POST /projects/:user/:name/build - Rebuild container
+// POST /projects/:user/:name/build - Rebuild container (async)
 projectsRouter.post('/:user/:name/build', async (req, res) => {
   try {
     const { user, name } = req.params
@@ -251,22 +253,31 @@ projectsRouter.post('/:user/:name/build', async (req, res) => {
     }
     const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'))
 
-    await acquireBuildSlot()
-    try {
-      const imgTag = imageName(user, name)
-      await buildImage(projectDir, imgTag)
-      await runContainer(containerName(user, name), imgTag, meta.port)
-      await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
+    // Marcar como building y responder inmediatamente
+    fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'building' }, null, 2))
+    res.json({ ok: true, port: meta.port, status: 'building' })
 
-      const check = await waitForContainer(meta.port)
-      if (!check.ok) {
-        return res.status(500).json({ error: check.error })
+    // Build en background
+    ;(async () => {
+      await acquireBuildSlot()
+      console.log(`[sandbox] ${user}/${name} rebuild iniciado`)
+      try {
+        const imgTag = imageName(user, name)
+        await buildImage(projectDir, imgTag)
+        await runContainer(containerName(user, name), imgTag, meta.port)
+        await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
+
+        const check = await waitForContainer(meta.port)
+        const finalStatus = check.ok ? 'running' : 'error'
+        fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: finalStatus }, null, 2))
+        console.log(`[sandbox] ${user}/${name} rebuild: ${finalStatus}`)
+      } catch (err) {
+        console.error(`[sandbox] ${user}/${name} rebuild error:`, err.message)
+        fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: err.message }, null, 2))
+      } finally {
+        releaseBuildSlot()
       }
-    } finally {
-      releaseBuildSlot()
-    }
-
-    res.json({ ok: true, port: meta.port })
+    })()
   } catch (err) {
     console.error('Build error:', err)
     res.status(500).json({ error: err.message })
