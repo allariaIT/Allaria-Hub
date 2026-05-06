@@ -6,7 +6,7 @@ export const proxyRouter = Router()
 
 const LITELLM_URL = process.env.LITELLM_URL || 'https://litellm.allaria.xyz/v1/chat/completions'
 const LITELLM_KEY = process.env.LITELLM_KEY
-const MAX_TOOL_ROUNDS = 5
+const MAX_TOOL_ROUNDS = 10
 
 function extractTextForDb(content) {
   if (typeof content === 'string') return content
