@@ -2,9 +2,10 @@
 const SANDBOX_AGENT_URL = process.env.SANDBOX_AGENT_URL || 'http://172.30.200.101:3100'
 const SANDBOX_AGENT_KEY = process.env.SANDBOX_AGENT_KEY
 
-async function sandboxRequest(path, options = {}) {
+async function sandboxRequest(path, options = {}, timeoutMs = 10_000) {
   const res = await fetch(`${SANDBOX_AGENT_URL}${path}`, {
     ...options,
+    signal: AbortSignal.timeout(timeoutMs),
     headers: {
       'Content-Type': 'application/json',
       'X-Sandbox-Key': SANDBOX_AGENT_KEY,
@@ -39,6 +40,7 @@ export async function sandboxListFiles(userSlug, name) {
 }
 
 export async function sandboxBuild(userSlug, name) {
+  // Build es async ahora — el endpoint responde inmediatamente
   return sandboxRequest(`/projects/${userSlug}/${name}/build`, { method: 'POST' })
 }
 
