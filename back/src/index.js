@@ -82,6 +82,27 @@ async function reconcileProjects() {
         // sandbox no tiene el proyecto o no responde — dejar como está
       }
     }
+
+    // Segundo pass: proyectos 'running' en DB pero container caído → stopped
+    const runningProjects = await prisma.project.findMany({
+      where: { status: 'running', port: { not: null } },
+      include: { user: { select: { email: true } } },
+    })
+
+    for (const project of runningProjects) {
+      try {
+        const userSlug = slugFromEmail(project.user.email)
+        const status = await sandboxStatus(userSlug, project.name)
+        if (status.status !== 'running') {
+          await prisma.project.update({ where: { id: project.id }, data: { status: 'stopped' } })
+          console.log(`[reconcile] ${project.name} → stopped (container caído)`)
+        }
+      } catch {
+        // 404 o error = el sandbox no tiene el container
+        await prisma.project.update({ where: { id: project.id }, data: { status: 'stopped' } }).catch(() => {})
+        console.log(`[reconcile] ${project.name} → stopped (sandbox 404)`)
+      }
+    }
   } catch (err) {
     console.error('[reconcile] Error:', err.message)
   }
