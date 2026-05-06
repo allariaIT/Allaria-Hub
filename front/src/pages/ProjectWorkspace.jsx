@@ -17,12 +17,13 @@ REGLAS IMPORTANTES:
 2. Cada vez que modifiques archivos, al final SIEMPRE actualizá CHANGELOG.md agregando una entrada con: fecha, qué se cambió y por qué. Usá formato markdown simple.
 3. Después de modificar archivos, SIEMPRE llamá sandbox_build para deployar los cambios.
 4. Para pushear a GitLab usá sandbox_push cuando el usuario lo pida.
+5. NO creés proyectos nuevos. Solo trabajás dentro del proyecto activo indicado abajo.
 
 Tools disponibles: sandbox_write_file, sandbox_read_file, sandbox_list_files, sandbox_build, sandbox_push, sandbox_status.`
 
 const DEFAULT_MODEL = 'claude-sonnet-4-5'
 
-const CONNECTORS = ['sandbox']
+const CONNECTORS = ['workspaceSandbox']
 
 const TOOL_PROGRESS = {
   sandbox_write_file:    (a) => `Escribiendo ${a.filePath || 'archivo'}`,
@@ -89,10 +90,35 @@ export default function ProjectWorkspace() {
     load()
   }, [id])
 
+  // Auto-refresh: si el proyecto está creando, esperar a que esté running
+  useEffect(() => {
+    if (project?.status !== 'creating') return
+    const interval = setInterval(async () => {
+      try {
+        const updated = await api.getProject(id)
+        if (updated.status !== 'creating') {
+          setProject(updated)
+        }
+      } catch {}
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [project?.status, id])
+
   // Polling: si el último mensaje es del usuario (backend procesando en background), esperar respuesta
   useEffect(() => {
     if (!interrupted || sending || !chat) return
+    let attempts = 0
     const interval = setInterval(async () => {
+      attempts++
+      if (attempts > 40) { // 40 × 3s = 2 minutos máximo
+        setInterrupted(false)
+        clearInterval(interval)
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'No se recibió respuesta del servidor. Podés intentar enviar el mensaje de nuevo.',
+        }])
+        return
+      }
       try {
         const chatData = await api.getProjectChat(id)
         const msgs = chatData.messages || []
@@ -224,6 +250,7 @@ export default function ProjectWorkspace() {
   }
 
   const handleRetry = () => {
+    if (sending) return
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
     if (!lastUserMsg) return
     const lastIdx = messages.lastIndexOf(lastUserMsg)
@@ -252,7 +279,7 @@ export default function ProjectWorkspace() {
     <div className="pw-error">
       <Loader2 size={32} className="pw-spin" style={{ color: '#eab308' }} />
       <p style={{ marginTop: '1rem', fontWeight: 600 }}>El proyecto se está creando...</p>
-      <p style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>Esto puede tardar hasta un minuto. Volvé en unos segundos.</p>
+      <p style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>Esto puede tardar hasta un minuto. El workspace abre automáticamente cuando esté listo.</p>
       <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => navigate('/proyectos')}>Volver al hub</button>
     </div>
   )
