@@ -101,7 +101,7 @@ export default function Projects() {
     e.stopPropagation()
     try {
       const updated = await api.publishProject(id)
-      setMyProjects(prev => prev.map(p => p.id === id ? { ...p, ...updated } : p))
+      setMyProjects(prev => prev.map(p => p.id === id ? { ...p, isPublic: updated.isPublic, _count: updated._count } : p))
     } catch (err) {
       alert('Error: ' + err.message)
     }
@@ -111,7 +111,7 @@ export default function Projects() {
     e.stopPropagation()
     try {
       const updated = await api.unpublishProject(id)
-      setMyProjects(prev => prev.map(p => p.id === id ? { ...p, ...updated } : p))
+      setMyProjects(prev => prev.map(p => p.id === id ? { ...p, isPublic: updated.isPublic, _count: updated._count } : p))
     } catch (err) {
       alert('Error: ' + err.message)
     }
@@ -306,7 +306,7 @@ export default function Projects() {
                       <span className="project-stat" style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
                         {new Date(project.createdAt).toLocaleDateString('es-AR')}
                       </span>
-                      {project.user?.id !== user?.id && (
+                      {user && project.user?.id !== user?.id && (
                         <button
                           className={`star-btn${project.starredByMe ? ' star-btn--active' : ''}`}
                           onClick={(e) => { e.stopPropagation(); handleStar(project) }}
