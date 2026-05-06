@@ -101,14 +101,27 @@ projectsRouter.post('/', async (req, res) => {
   }
 })
 
-// GET /api/projects/community - All projects from all users (hub)
+// GET /api/projects/community - All public projects ordered by stars
 projectsRouter.get('/community', async (req, res) => {
   const projects = await prisma.project.findMany({
-    where: { status: { in: ['running', 'stopped'] } },
-    orderBy: { createdAt: 'desc' },
-    include: { user: { select: { name: true, picture: true } } },
+    where: { isPublic: true, status: 'running' },
+    orderBy: { stars: { _count: 'desc' } },
+    include: {
+      user: { select: { id: true, name: true, picture: true } },
+      _count: { select: { stars: true } },
+    },
   })
-  res.json(projects)
+
+  const starred = await prisma.projectStar.findMany({
+    where: { userId: req.user.id, projectId: { in: projects.map(p => p.id) } },
+    select: { projectId: true },
+  })
+  const starredSet = new Set(starred.map(s => s.projectId))
+
+  res.json(projects.map(p => ({
+    ...p,
+    starredByMe: starredSet.has(p.id),
+  })))
 })
 
 // GET /api/projects - List user's projects
@@ -116,6 +129,7 @@ projectsRouter.get('/', async (req, res) => {
   const projects = await prisma.project.findMany({
     where: { userId: req.user.id },
     orderBy: { updatedAt: 'desc' },
+    include: { _count: { select: { stars: true } } },
   })
   res.json(projects)
 })
