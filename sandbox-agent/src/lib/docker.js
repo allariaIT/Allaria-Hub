@@ -41,6 +41,13 @@ export async function getUsedPorts() {
 }
 
 export async function buildImage(contextDir, tag) {
+  // Guardar ID de la imagen anterior para limpiarla después (evitar dangling)
+  let oldImageId = null
+  try {
+    const info = await docker.getImage(tag).inspect()
+    oldImageId = info.Id
+  } catch {}
+
   const stream = await docker.buildImage(
     { context: contextDir, src: ['.'] },
     { t: tag }
@@ -51,6 +58,11 @@ export async function buildImage(contextDir, tag) {
       else resolve(output)
     })
   })
+
+  // Eliminar imagen anterior (ahora es dangling) para liberar disco
+  if (oldImageId) {
+    try { await docker.getImage(oldImageId).remove({ force: true }) } catch {}
+  }
 }
 
 export async function runContainer(name, imageTag, hostPort) {
@@ -61,13 +73,6 @@ export async function runContainer(name, imageTag, hostPort) {
     await existing.remove()
   } catch {
     // Container doesn't exist, fine
-  }
-
-  // Remove dangling image from previous build
-  try {
-    await docker.getImage(imageTag).remove({ force: true })
-  } catch {
-    // Image doesn't exist yet or in use — fine
   }
 
   const container = await docker.createContainer({
@@ -113,16 +118,19 @@ export async function execInContainer(name, cmd) {
   const stream = await exec.start()
   return new Promise((resolve, reject) => {
     let output = ''
+    let remainder = Buffer.alloc(0)
     stream.on('data', (chunk) => {
-      // Docker multiplexes stdout/stderr with an 8-byte header per frame
+      // Combinar con bytes residuales del chunk anterior
+      const buf = Buffer.concat([remainder, chunk])
       let offset = 0
-      while (offset + 8 <= chunk.length) {
-        const frameSize = chunk.readUInt32BE(offset + 4)
+      while (offset + 8 <= buf.length) {
+        const frameSize = buf.readUInt32BE(offset + 4)
         const end = offset + 8 + frameSize
-        if (end > chunk.length) break
-        output += chunk.slice(offset + 8, end).toString()
+        if (end > buf.length) break // frame incompleto, guardar para el próximo chunk
+        output += buf.slice(offset + 8, end).toString()
         offset = end
       }
+      remainder = buf.slice(offset) // guardar bytes sobrantes
     })
     stream.on('end', () => resolve(output))
     stream.on('error', reject)
