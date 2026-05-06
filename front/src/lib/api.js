@@ -101,4 +101,8 @@ export const api = {
   deleteProject: (id) => request(`/api/projects/${id}`, { method: 'DELETE' }),
   stopProject: (id) => request(`/api/projects/${id}/stop`, { method: 'POST' }),
   getProjectChat: (id) => request(`/api/projects/${id}/chat`),
+  publishProject: (id) => request(`/api/projects/${id}/publish`, { method: 'PATCH' }),
+  unpublishProject: (id) => request(`/api/projects/${id}/unpublish`, { method: 'PATCH' }),
+  starProject: (id) => request(`/api/projects/${id}/star`, { method: 'POST' }),
+  unstarProject: (id) => request(`/api/projects/${id}/star`, { method: 'DELETE' }),
 }
