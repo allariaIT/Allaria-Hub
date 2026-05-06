@@ -4,6 +4,11 @@ import { tasksListAll, tasksCreate, tasksComplete, tasksSearch } from './gtasks.
 import { driveListFiles, driveSearchFiles, driveGetFile } from './drive.js'
 import { SANDBOX_TOOL_DEFINITIONS, executeSandboxTool } from './sandbox-tools.js'
 
+// Tools de sandbox disponibles en el workspace (excluye sandbox_create_project)
+const WORKSPACE_SANDBOX_TOOL_DEFINITIONS = SANDBOX_TOOL_DEFINITIONS.filter(
+  t => t.function.name !== 'sandbox_create_project'
+)
+
 // Tools que requieren confirmación del usuario antes de ejecutarse
 export const CONFIRMABLE_TOOLS = new Set([
   'gmail_send',
@@ -190,6 +195,8 @@ export const TOOL_DEFINITIONS = {
   ],
 
   sandbox: SANDBOX_TOOL_DEFINITIONS,
+
+  workspaceSandbox: WORKSPACE_SANDBOX_TOOL_DEFINITIONS,
 
   drive: [
     {
