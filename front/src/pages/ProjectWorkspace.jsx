@@ -293,13 +293,6 @@ export default function ProjectWorkspace() {
     </div>
   )
 
-  if (error) return (
-    <div className="pw-error">
-      <p>{error}</p>
-      <button className="btn btn-primary" onClick={() => navigate('/proyectos')}>Volver</button>
-    </div>
-  )
-
   return (
     <div className="pw-root">
       {/* TOP BAR */}
