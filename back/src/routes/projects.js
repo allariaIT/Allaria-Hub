@@ -185,6 +185,33 @@ projectsRouter.patch('/:id', async (req, res) => {
   res.json(updated)
 })
 
+// POST /api/projects/:id/star - Dar estrella
+projectsRouter.post('/:id/star', async (req, res) => {
+  const project = await prisma.project.findFirst({
+    where: { id: req.params.id, isPublic: true, status: 'running' },
+  })
+  if (!project) return res.status(404).json({ error: 'Proyecto no encontrado o no público' })
+  if (project.userId === req.user.id) return res.status(400).json({ error: 'No podés darle estrella a tu propio proyecto' })
+
+  await prisma.projectStar.upsert({
+    where: { userId_projectId: { userId: req.user.id, projectId: project.id } },
+    create: { userId: req.user.id, projectId: project.id },
+    update: {},
+  })
+
+  const count = await prisma.projectStar.count({ where: { projectId: project.id } })
+  res.json({ stars: count })
+})
+
+// DELETE /api/projects/:id/star - Quitar estrella
+projectsRouter.delete('/:id/star', async (req, res) => {
+  await prisma.projectStar.deleteMany({
+    where: { userId: req.user.id, projectId: req.params.id },
+  })
+  const count = await prisma.projectStar.count({ where: { projectId: req.params.id } })
+  res.json({ stars: count })
+})
+
 // DELETE /api/projects/:id - Delete project
 projectsRouter.delete('/:id', async (req, res) => {
   const project = await prisma.project.findFirst({
