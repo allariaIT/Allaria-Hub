@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Search, ArrowUpRight, Plus, Loader2, ExternalLink, GitBranch, Square, Trash2, X } from 'lucide-react'
+import { Search, ArrowUpRight, Plus, Loader2, ExternalLink, GitBranch, Square, Trash2, X, Globe, EyeOff, Star } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
+import { useAuth } from '../context/AuthContext'
 import './Projects.css'
 
 const STATUS_LABELS = { running: 'Activo', stopped: 'Detenido', creating: 'Creando...', error: 'Error' }
@@ -9,6 +10,7 @@ const STATUS_COLORS = { running: '#22c55e', stopped: '#888', creating: '#eab308'
 
 export default function Projects() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [myProjects, setMyProjects] = useState([])
   const [communityProjects, setCommunityProjects] = useState([])
   const [loadingMy, setLoadingMy] = useState(true)
@@ -95,6 +97,50 @@ export default function Projects() {
     }
   }
 
+  const handlePublish = async (e, id) => {
+    e.stopPropagation()
+    try {
+      const updated = await api.publishProject(id)
+      setMyProjects(prev => prev.map(p => p.id === id ? { ...p, ...updated } : p))
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
+  }
+
+  const handleUnpublish = async (e, id) => {
+    e.stopPropagation()
+    try {
+      const updated = await api.unpublishProject(id)
+      setMyProjects(prev => prev.map(p => p.id === id ? { ...p, ...updated } : p))
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
+  }
+
+  const handleStar = async (project) => {
+    const wasStarred = project.starredByMe
+    // Optimistic update
+    setCommunityProjects(prev => prev.map(p =>
+      p.id === project.id
+        ? { ...p, starredByMe: !wasStarred, _count: { ...p._count, stars: p._count.stars + (wasStarred ? -1 : 1) } }
+        : p
+    ))
+    try {
+      if (wasStarred) {
+        await api.unstarProject(project.id)
+      } else {
+        await api.starProject(project.id)
+      }
+    } catch {
+      // Revertir si falla
+      setCommunityProjects(prev => prev.map(p =>
+        p.id === project.id
+          ? { ...p, starredByMe: wasStarred, _count: { ...p._count, stars: p._count.stars + (wasStarred ? 1 : -1) } }
+          : p
+      ))
+    }
+  }
+
   // Auto-generate name slug from title
   const handleTitleChange = (title) => {
     setForm(f => ({
@@ -146,13 +192,21 @@ export default function Projects() {
                     <span className="my-project-title">{project.title}</span>
                     <span className="my-project-slug">{project.name}</span>
                   </div>
-                  <span
-                    className="my-project-status"
-                    style={{ '--sc': STATUS_COLORS[project.status] || '#888' }}
-                  >
-                    {project.status === 'creating' && <Loader2 size={11} className="spin-icon" style={{ marginRight: 4 }} />}
-                    {STATUS_LABELS[project.status] || project.status}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {(project.isPublic || project._count?.stars > 0) && (
+                      <span className="my-project-stars">
+                        <Star size={11} style={{ fill: '#eab308', color: '#eab308' }} />
+                        {project._count?.stars ?? 0}
+                      </span>
+                    )}
+                    <span
+                      className="my-project-status"
+                      style={{ '--sc': STATUS_COLORS[project.status] || '#888' }}
+                    >
+                      {project.status === 'creating' && <Loader2 size={11} className="spin-icon" style={{ marginRight: 4 }} />}
+                      {STATUS_LABELS[project.status] || project.status}
+                    </span>
+                  </div>
                 </div>
                 {project.description && <p className="my-project-desc">{project.description}</p>}
                 <div className="my-project-actions" onClick={e => e.stopPropagation()}>
@@ -165,6 +219,15 @@ export default function Projects() {
                     <a href={project.repoUrl} target="_blank" rel="noopener noreferrer" className="my-project-btn">
                       <GitBranch size={13} /> GitLab
                     </a>
+                  )}
+                  {project.status === 'running' && (
+                    project.isPublic
+                      ? <button className="my-project-btn" onClick={(e) => handleUnpublish(e, project.id)} title="Despublicar">
+                          <EyeOff size={13} /> Despublicar
+                        </button>
+                      : <button className="my-project-btn publish" onClick={(e) => handlePublish(e, project.id)} title="Publicar en el Hub">
+                          <Globe size={13} /> Publicar
+                        </button>
                   )}
                   {project.status === 'running' && (
                     <button className="my-project-btn stop" onClick={(e) => handleStop(e, project.id)}>
@@ -239,9 +302,27 @@ export default function Projects() {
                     >
                       {STATUS_LABELS[project.status] || project.status}
                     </span>
-                    <span className="project-stat" style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                      {new Date(project.createdAt).toLocaleDateString('es-AR')}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="project-stat" style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                        {new Date(project.createdAt).toLocaleDateString('es-AR')}
+                      </span>
+                      {project.user?.id !== user?.id && (
+                        <button
+                          className={`star-btn${project.starredByMe ? ' star-btn--active' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); handleStar(project) }}
+                          title={project.starredByMe ? 'Quitar estrella' : 'Dar estrella'}
+                        >
+                          <Star size={13} />
+                          <span>{project._count?.stars ?? 0}</span>
+                        </button>
+                      )}
+                      {project.user?.id === user?.id && project._count?.stars > 0 && (
+                        <span className="star-count-own">
+                          <Star size={13} style={{ fill: '#eab308', color: '#eab308' }} />
+                          {project._count.stars}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
