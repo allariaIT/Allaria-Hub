@@ -10,11 +10,21 @@ export function imageName(userSlug, projectName) {
   return `sandbox-${userSlug}-${projectName}:latest`
 }
 
+// Puertos reservados por builds en curso (previene race condition)
+const reservedPorts = new Set()
+
 export function findFreePort(usedPorts, rangeStart, rangeEnd) {
   for (let port = rangeStart; port <= rangeEnd; port++) {
-    if (!usedPorts.has(port)) return port
+    if (!usedPorts.has(port) && !reservedPorts.has(port)) {
+      reservedPorts.add(port)
+      return port
+    }
   }
   throw new Error('No hay puertos disponibles en el rango')
+}
+
+export function releaseReservedPort(port) {
+  reservedPorts.delete(port)
 }
 
 export async function getUsedPorts() {
@@ -51,6 +61,13 @@ export async function runContainer(name, imageTag, hostPort) {
     await existing.remove()
   } catch {
     // Container doesn't exist, fine
+  }
+
+  // Remove dangling image from previous build
+  try {
+    await docker.getImage(imageTag).remove({ force: true })
+  } catch {
+    // Image doesn't exist yet or in use — fine
   }
 
   const container = await docker.createContainer({
@@ -96,7 +113,17 @@ export async function execInContainer(name, cmd) {
   const stream = await exec.start()
   return new Promise((resolve, reject) => {
     let output = ''
-    stream.on('data', (chunk) => { output += chunk.toString() })
+    stream.on('data', (chunk) => {
+      // Docker multiplexes stdout/stderr with an 8-byte header per frame
+      let offset = 0
+      while (offset + 8 <= chunk.length) {
+        const frameSize = chunk.readUInt32BE(offset + 4)
+        const end = offset + 8 + frameSize
+        if (end > chunk.length) break
+        output += chunk.slice(offset + 8, end).toString()
+        offset = end
+      }
+    })
     stream.on('end', () => resolve(output))
     stream.on('error', reject)
   })
