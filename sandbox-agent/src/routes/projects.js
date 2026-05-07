@@ -3,7 +3,7 @@ import { Router } from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
 import { generateScaffold } from '../lib/scaffold.js'
-import { buildImage, runContainer, stopContainer, getUsedPorts, findFreePort, releaseReservedPort, containerName, imageName, getContainerStatus, execInContainer } from '../lib/docker.js'
+import { buildImage, runContainer, stopContainer, getUsedPorts, findFreePort, releaseReservedPort, pruneOldImage, containerName, imageName, getContainerStatus, execInContainer } from '../lib/docker.js'
 import { writeAndReloadNginx } from '../lib/nginx.js'
 import { gitInit, gitCommitAndPush } from '../lib/git.js'
 
@@ -101,6 +101,7 @@ projectsRouter.post('/', async (req, res) => {
         await buildImage(projectDir, imgTag)
         await runContainer(containerName(userSlug, name), imgTag, port)
         releaseReservedPort(port)
+        pruneOldImage() // limpia dangling images después de que el container viejo fue detenido
         await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
         gitCommitAndPush(projectDir, 'Initial scaffold')
 
@@ -270,6 +271,7 @@ projectsRouter.post('/:user/:name/build', async (req, res) => {
         const imgTag = imageName(user, name)
         await buildImage(projectDir, imgTag)
         await runContainer(containerName(user, name), imgTag, meta.port)
+        pruneOldImage() // limpia dangling images después de que el container viejo fue detenido
         await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
 
         const check = await waitForContainer(meta.port)

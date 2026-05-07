@@ -41,13 +41,6 @@ export async function getUsedPorts() {
 }
 
 export async function buildImage(contextDir, tag) {
-  // Guardar ID de la imagen anterior para limpiarla después (evitar dangling)
-  let oldImageId = null
-  try {
-    const info = await docker.getImage(tag).inspect()
-    oldImageId = info.Id
-  } catch {}
-
   const stream = await docker.buildImage(
     { context: contextDir, src: ['.'] },
     { t: tag }
@@ -58,11 +51,18 @@ export async function buildImage(contextDir, tag) {
       else resolve(output)
     })
   })
+}
 
-  // Eliminar imagen anterior (ahora es dangling) para liberar disco
-  if (oldImageId) {
-    try { await docker.getImage(oldImageId).remove({ force: true }) } catch {}
-  }
+// Eliminar imágenes dangling (sin tag) para liberar disco.
+// Llamar DESPUÉS de runContainer, cuando el container viejo ya fue detenido.
+export async function pruneOldImage(tag) {
+  try {
+    // Buscar imágenes sin tag (dangling) que tengan el mismo repositorio base
+    const images = await docker.listImages({ filters: { dangling: ['true'] } })
+    for (const img of images) {
+      try { await docker.getImage(img.Id).remove({ force: true }) } catch {}
+    }
+  } catch {}
 }
 
 export async function runContainer(name, imageTag, hostPort) {
