@@ -78,6 +78,7 @@ export async function pruneOldImage(tag) {
 }
 
 export async function runContainer(name, imageTag, hostPort) {
+  console.log(`[runContainer] stop/remove ${name}`)
   // Remove existing container if any
   try {
     const existing = docker.getContainer(name)
@@ -86,6 +87,7 @@ export async function runContainer(name, imageTag, hostPort) {
   } catch {
     // Container doesn't exist, fine
   }
+  console.log(`[runContainer] createContainer ${name} img=${imageTag} port=${hostPort}`)
 
   const container = await docker.createContainer({
     Image: imageTag,
