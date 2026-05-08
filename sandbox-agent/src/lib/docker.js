@@ -44,14 +44,18 @@ export async function getUsedPorts() {
 export async function buildImage(contextDir, tag) {
   // Usar docker CLI directamente — dockerode.buildImage cuelga creando el tar cuando hay .git
   return new Promise((resolve, reject) => {
-    const proc = spawn('docker', ['build', '-t', tag, contextDir], {
+    const proc = spawn('docker', ['build', '-t', tag, '.'], {
+      cwd: contextDir,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
+    let stderr = ''
+    proc.stderr.on('data', (d) => { stderr += d.toString() })
+    proc.stdout.on('data', () => {}) // consumir stdout para no bloquear el pipe
     proc.on('close', (code) => {
       if (code === 0) resolve()
-      else reject(new Error(`docker build falló con código ${code}`))
+      else reject(new Error(`docker build falló (${code}): ${stderr.slice(-500)}`))
     })
-    proc.on('error', reject)
+    proc.on('error', (err) => reject(new Error(`spawn docker build: ${err.message}`)))
   })
 }
 
