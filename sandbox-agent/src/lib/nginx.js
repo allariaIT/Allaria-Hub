@@ -1,7 +1,6 @@
 import fs from 'node:fs'
-import Docker from 'dockerode'
+import { spawn } from 'node:child_process'
 
-const docker = new Docker()
 const PROXY_HOST = process.env.PROXY_HOST || 'host.docker.internal'
 
 export function generateNginxConfig(projects) {
@@ -27,16 +26,14 @@ ${locations}
 export async function writeAndReloadNginx(configPath, projects) {
   const config = generateNginxConfig(projects)
   fs.writeFileSync(configPath, config)
-  try {
-    const container = docker.getContainer('sandbox-nginx')
-    const exec = await container.exec({
-      Cmd: ['nginx', '-s', 'reload'],
-      AttachStdout: true,
-      AttachStderr: true,
+  // Recargar nginx via CLI — dockerode.exec cuelga en este entorno
+  await new Promise((resolve) => {
+    const proc = spawn('docker', ['exec', 'sandbox-nginx', 'nginx', '-s', 'reload'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
-    const stream = await exec.start({})
-    await new Promise(resolve => stream.on('end', resolve))
-  } catch (err) {
-    console.warn('[nginx] Could not reload:', err.message)
-  }
+    proc.stdout.on('data', () => {})
+    proc.stderr.on('data', () => {})
+    proc.on('close', () => resolve())
+    proc.on('error', () => resolve()) // ignorar errores — nginx sigue funcionando con config anterior
+  })
 }
