@@ -1,4 +1,5 @@
 import Docker from 'dockerode'
+import { spawn } from 'node:child_process'
 
 const docker = new Docker()
 
@@ -41,15 +42,16 @@ export async function getUsedPorts() {
 }
 
 export async function buildImage(contextDir, tag) {
-  const stream = await docker.buildImage(
-    { context: contextDir, src: ['.'] },
-    { t: tag }
-  )
-  await new Promise((resolve, reject) => {
-    docker.modem.followProgress(stream, (err, output) => {
-      if (err) reject(err)
-      else resolve(output)
+  // Usar docker CLI directamente — dockerode.buildImage cuelga creando el tar cuando hay .git
+  return new Promise((resolve, reject) => {
+    const proc = spawn('docker', ['build', '-t', tag, contextDir], {
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
+    proc.on('close', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`docker build falló con código ${code}`))
+    })
+    proc.on('error', reject)
   })
 }
 
