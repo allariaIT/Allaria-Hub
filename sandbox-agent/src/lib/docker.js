@@ -1,7 +1,22 @@
-import Docker from 'dockerode'
 import { spawn } from 'node:child_process'
 
-const docker = new Docker()
+// Helper: correr un comando docker CLI y devolver stdout
+function runDockerCmd(args, ignoreError = false) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = '', stderr = ''
+    proc.stdout.on('data', d => { stdout += d.toString() })
+    proc.stderr.on('data', d => { stderr += d.toString() })
+    proc.on('close', code => {
+      if (code === 0 || ignoreError) resolve(stdout.trim())
+      else reject(new Error(`docker ${args[0]} (exit ${code}): ${stderr.slice(-300)}`))
+    })
+    proc.on('error', err => {
+      if (ignoreError) resolve('')
+      else reject(err)
+    })
+  })
+}
 
 export function containerName(userSlug, projectName) {
   return `sandbox-${userSlug}-${projectName}`
@@ -29,124 +44,71 @@ export function releaseReservedPort(port) {
 }
 
 export async function getUsedPorts() {
-  const containers = await docker.listContainers({ all: true })
+  // docker ps --filter name=sandbox- --format '{{.Ports}}'
+  // Output: "0.0.0.0:4001->80/tcp, :::4001->80/tcp"
+  const out = await runDockerCmd(['ps', '--filter', 'name=sandbox-', '--format', '{{.Ports}}'], true)
   const used = new Set()
-  for (const c of containers) {
-    if (c.Names.some(n => n.startsWith('/sandbox-'))) {
-      for (const p of (c.Ports || [])) {
-        if (p.PublicPort) used.add(p.PublicPort)
-      }
+  for (const line of out.split('\n')) {
+    const matches = line.matchAll(/:(\d+)->80/g)
+    for (const m of matches) {
+      used.add(parseInt(m[1]))
     }
   }
   return used
 }
 
 export async function buildImage(contextDir, tag) {
-  // Usar docker CLI directamente — dockerode.buildImage cuelga creando el tar cuando hay .git
-  console.log(`[buildImage] spawn docker build -t ${tag} en ${contextDir}`)
   return new Promise((resolve, reject) => {
     const proc = spawn('docker', ['build', '-t', tag, '.'], {
       cwd: contextDir,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
-    console.log(`[buildImage] PID del proceso: ${proc.pid}`)
     let stderr = ''
-    proc.stderr.on('data', (d) => { stderr += d.toString() })
-    proc.stdout.on('data', () => {}) // consumir stdout para no bloquear el pipe
-    proc.on('close', (code) => {
-      console.log(`[buildImage] close code=${code} stderr=${stderr.slice(-200)}`)
+    proc.stderr.on('data', d => { stderr += d.toString() })
+    proc.stdout.on('data', () => {})
+    proc.on('close', code => {
       if (code === 0) resolve()
       else reject(new Error(`docker build falló (${code}): ${stderr.slice(-500)}`))
     })
-    proc.on('error', (err) => {
-      console.error(`[buildImage] spawn error: ${err.message}`)
-      reject(new Error(`spawn docker build: ${err.message}`))
-    })
+    proc.on('error', err => reject(new Error(`spawn docker build: ${err.message}`)))
   })
-}
-
-// Eliminar imágenes dangling (sin tag) para liberar disco.
-// Llamar DESPUÉS de runContainer, cuando el container viejo ya fue detenido.
-export async function pruneOldImage(tag) {
-  try {
-    // Buscar imágenes sin tag (dangling) que tengan el mismo repositorio base
-    const images = await docker.listImages({ filters: { dangling: ['true'] } })
-    for (const img of images) {
-      try { await docker.getImage(img.Id).remove({ force: true }) } catch {}
-    }
-  } catch {}
 }
 
 export async function runContainer(name, imageTag, hostPort) {
-  console.log(`[runContainer] stop/remove ${name}`)
-  // Remove existing container if any
-  try {
-    const existing = docker.getContainer(name)
-    await existing.stop().catch(() => {})
-    await existing.remove()
-  } catch {
-    // Container doesn't exist, fine
-  }
-  console.log(`[runContainer] createContainer ${name} img=${imageTag} port=${hostPort}`)
+  // Detener y eliminar container existente
+  await runDockerCmd(['stop', name], true)
+  await runDockerCmd(['rm', name], true)
 
-  const container = await docker.createContainer({
-    Image: imageTag,
-    name,
-    HostConfig: {
-      PortBindings: { '80/tcp': [{ HostPort: String(hostPort) }] },
-      RestartPolicy: { Name: 'unless-stopped' },
-    },
-    ExposedPorts: { '80/tcp': {} },
-  })
-  await container.start()
-  return container
+  // Crear y arrancar nuevo container
+  await runDockerCmd([
+    'run', '-d',
+    '--name', name,
+    '-p', `${hostPort}:80`,
+    '--restart', 'unless-stopped',
+    imageTag,
+  ])
 }
 
 export async function stopContainer(name) {
-  try {
-    const container = docker.getContainer(name)
-    await container.stop()
-    await container.remove()
-  } catch {
-    // Already stopped/removed
-  }
+  await runDockerCmd(['stop', name], true)
+  await runDockerCmd(['rm', name], true)
 }
 
 export async function getContainerStatus(name) {
   try {
-    const container = docker.getContainer(name)
-    const info = await container.inspect()
-    return info.State.Running ? 'running' : 'stopped'
+    const out = await runDockerCmd(['inspect', '--format', '{{.State.Running}}', name])
+    return out.trim() === 'true' ? 'running' : 'stopped'
   } catch {
     return 'stopped'
   }
 }
 
+// Eliminar imágenes dangling para liberar disco (llamar después de runContainer)
+export async function pruneOldImage() {
+  await runDockerCmd(['image', 'prune', '-f'], true)
+}
+
 export async function execInContainer(name, cmd) {
-  const container = docker.getContainer(name)
-  const exec = await container.exec({
-    Cmd: ['sh', '-c', cmd],
-    AttachStdout: true,
-    AttachStderr: true,
-  })
-  const stream = await exec.start()
-  return new Promise((resolve, reject) => {
-    let output = ''
-    let remainder = Buffer.alloc(0)
-    stream.on('data', (chunk) => {
-      // Combinar con bytes residuales del chunk anterior
-      const buf = Buffer.concat([remainder, chunk])
-      let offset = 0
-      while (offset + 8 <= buf.length) {
-        const frameSize = buf.readUInt32BE(offset + 4)
-        const end = offset + 8 + frameSize
-        if (end > buf.length) break // frame incompleto, guardar para el próximo chunk
-        output += buf.slice(offset + 8, end).toString()
-        offset = end
-      }
-      remainder = buf.slice(offset) // guardar bytes sobrantes
-    })
-    stream.on('end', () => resolve(output))
-    stream.on('error', reject)
-  })
+  // Docker CLI exec — sin necesidad de demultiplexar stream
+  return runDockerCmd(['exec', name, 'sh', '-c', cmd], false)
 }
