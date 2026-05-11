@@ -57,12 +57,12 @@ export async function getUsedPorts() {
   return used
 }
 
-export async function buildImage(contextDir, tag) {
+function spawnBuild(contextDir, tag, noCache = false) {
   return new Promise((resolve, reject) => {
-    const proc = spawn('docker', ['build', '-t', tag, '.'], {
-      cwd: contextDir,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    const args = ['build', '-t', tag]
+    if (noCache) args.push('--no-cache')
+    args.push('.')
+    const proc = spawn('docker', args, { cwd: contextDir, stdio: ['ignore', 'pipe', 'pipe'] })
     let stderr = ''
     proc.stderr.on('data', d => { stderr += d.toString() })
     proc.stdout.on('data', () => {})
@@ -72,6 +72,20 @@ export async function buildImage(contextDir, tag) {
     })
     proc.on('error', err => reject(new Error(`spawn docker build: ${err.message}`)))
   })
+}
+
+export async function buildImage(contextDir, tag) {
+  try {
+    await spawnBuild(contextDir, tag)
+  } catch (err) {
+    // Error de containerd por builds concurrentes que comparten layers — retry sin cache
+    if (err.message.includes('CreateDiff') || err.message.includes('mount callback') || err.message.includes('failed to commit')) {
+      console.warn(`[buildImage] containerd layer error, reintentando con --no-cache...`)
+      await spawnBuild(contextDir, tag, true)
+    } else {
+      throw err
+    }
+  }
 }
 
 export async function runContainer(name, imageTag, hostPort) {
