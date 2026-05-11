@@ -121,7 +121,7 @@ export default function ProjectWorkspace() {
     let attempts = 0
     const interval = setInterval(async () => {
       attempts++
-      if (attempts > 40) { // 40 × 3s = 2 minutos máximo
+      if (attempts > 80) { // 80 × 3s = 4 minutos máximo
         setInterrupted(false)
         clearInterval(interval)
         setMessages(prev => [...prev, {
