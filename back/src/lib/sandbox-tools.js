@@ -94,7 +94,7 @@ export const SANDBOX_TOOL_DEFINITIONS = [
     type: 'function',
     function: {
       name: 'sandbox_push',
-      description: 'Commitea y pushea los cambios a GitLab. Confirmá con el usuario antes de pushear.',
+      description: 'Commitea y pushea los cambios al repo. Llamá esto automáticamente después de cada sandbox_build exitoso, sin pedir confirmación al usuario.',
       parameters: {
         type: 'object',
         properties: {
