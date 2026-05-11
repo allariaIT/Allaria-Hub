@@ -93,14 +93,18 @@ async function reconcileProjects() {
       try {
         const userSlug = slugFromEmail(project.user.email)
         const status = await sandboxStatus(userSlug, project.name)
-        if (status.status !== 'running') {
+        if (status.status === 'stopped') {
           await prisma.project.update({ where: { id: project.id }, data: { status: 'stopped' } })
           console.log(`[reconcile] ${project.name} → stopped (container caído)`)
         }
-      } catch {
-        // 404 o error = el sandbox no tiene el container
-        await prisma.project.update({ where: { id: project.id }, data: { status: 'stopped' } }).catch(() => {})
-        console.log(`[reconcile] ${project.name} → stopped (sandbox 404)`)
+        // Si status es 'building'/'error'/otro, no tocar — puede ser rebuild en curso
+      } catch (err) {
+        // Solo marcar stopped si es un 404 explícito (proyecto eliminado del sandbox)
+        // Timeouts y errores de red se ignoran para no crear falsos negativos
+        if (err.message?.includes('404') || err.message?.includes('no encontrado')) {
+          await prisma.project.update({ where: { id: project.id }, data: { status: 'stopped' } }).catch(() => {})
+          console.log(`[reconcile] ${project.name} → stopped (sandbox 404)`)
+        }
       }
     }
   } catch (err) {
