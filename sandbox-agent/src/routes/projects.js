@@ -103,7 +103,10 @@ projectsRouter.post('/', async (req, res) => {
         releaseReservedPort(port)
         pruneOldImage() // limpia dangling images después de que el container viejo fue detenido
         await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
-        gitCommitAndPush(projectDir, 'Initial scaffold')
+        // Git push no-fatal: si falla no cancela el deploy
+        try { gitCommitAndPush(projectDir, 'Initial scaffold') } catch (gitErr) {
+          console.warn(`[sandbox] ${userSlug}/${name} git push ignorado:`, gitErr.message)
+        }
 
         const check = await waitForContainer(port)
         const finalStatus = check.ok ? 'running' : 'error'
@@ -112,7 +115,8 @@ projectsRouter.post('/', async (req, res) => {
       } catch (err) {
         releaseReservedPort(port)
         console.error(`[sandbox] ${userSlug}/${name} build error:`, err.message)
-        fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: err.message }, null, 2))
+        // Usar try/catch para evitar crash si el directorio no existe
+        try { fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: err.message }, null, 2)) } catch {}
       } finally {
         releaseBuildSlot()
       }
@@ -280,7 +284,7 @@ projectsRouter.post('/:user/:name/build', async (req, res) => {
         console.log(`[sandbox] ${user}/${name} rebuild: ${finalStatus}`)
       } catch (err) {
         console.error(`[sandbox] ${user}/${name} rebuild error:`, err.message)
-        fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: err.message }, null, 2))
+        try { fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: err.message }, null, 2)) } catch {}
       } finally {
         releaseBuildSlot()
       }
