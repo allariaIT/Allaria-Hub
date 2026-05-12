@@ -164,7 +164,7 @@ proxyRouter.post('/completions', async (req, res) => {
       rounds++
     }
 
-    const assistantContent = data.choices?.[0]?.message?.content || 'Sin respuesta.'
+    const assistantContent = data.choices?.[0]?.message?.content || 'La tarea tomó demasiado tiempo o no generó una respuesta. Podés pedirme que continúe o dividir la tarea en pasos más chicos.'
     await prisma.message.create({ data: { chatId, role: 'assistant', content: assistantContent, model } })
     await autoTitle(chat, chatId, lastUserMsg, data)
 
@@ -260,7 +260,7 @@ proxyRouter.post('/stream', async (req, res) => {
       rounds++
     }
 
-    const assistantContent = data.choices?.[0]?.message?.content || 'Sin respuesta.'
+    const assistantContent = data.choices?.[0]?.message?.content || 'La tarea tomó demasiado tiempo o no generó una respuesta. Podés pedirme que continúe o dividir la tarea en pasos más chicos.'
     // Siempre guardar en DB aunque el cliente se haya desconectado
     await prisma.message.create({ data: { chatId, role: 'assistant', content: assistantContent, model } })
     await autoTitle(chat, chatId, lastUserMsg, data)
@@ -372,7 +372,7 @@ proxyRouter.post('/confirm', async (req, res) => {
       rounds++
     }
 
-    const assistantContent = data.choices?.[0]?.message?.content || 'Sin respuesta.'
+    const assistantContent = data.choices?.[0]?.message?.content || 'La tarea tomó demasiado tiempo o no generó una respuesta. Podés pedirme que continúe o dividir la tarea en pasos más chicos.'
     await prisma.message.create({ data: { chatId, role: 'assistant', content: assistantContent, model } })
     await prisma.chat.update({ where: { id: chatId }, data: { updatedAt: new Date() } })
 

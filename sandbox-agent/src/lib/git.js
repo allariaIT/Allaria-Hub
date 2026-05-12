@@ -12,7 +12,7 @@ export function gitInit(projectDir, repoUrl) {
   }
 }
 
-export function gitCommitAndPush(projectDir, message) {
+export function gitCommitAndPush(projectDir, message, pushUrl) {
   run('git add -A', projectDir)
   // Usar spawnSync con array de args para evitar inyección de shell
   const commitResult = spawnSync('git', ['commit', '-m', message], {
@@ -25,7 +25,20 @@ export function gitCommitAndPush(projectDir, message) {
     return { pushed: false, message: 'Nada para commitear' }
   }
   try {
-    run('git push -u origin main', projectDir)
+    if (pushUrl) {
+      // Usar spawnSync para no exponer el token en el proceso
+      const pushResult = spawnSync('git', ['push', pushUrl, 'HEAD:main'], {
+        cwd: projectDir,
+        stdio: 'pipe',
+        timeout: 30000,
+        encoding: 'utf-8',
+      })
+      if (pushResult.status !== 0) {
+        throw new Error(pushResult.stderr || 'git push falló')
+      }
+    } else {
+      run('git push -u origin main', projectDir)
+    }
     return { pushed: true }
   } catch (err) {
     return { pushed: false, message: err.message }

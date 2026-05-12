@@ -7,6 +7,12 @@ import {
 } from './sandbox-client.js'
 
 const PREVIEW_BASE = process.env.SANDBOX_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz'
+const GITLAB_TOKEN = process.env.GITLAB_TOKEN
+
+function repoUrlWithAuth(url) {
+  if (!url || !GITLAB_TOKEN) return url
+  return url.replace('https://', `https://oauth2:${GITLAB_TOKEN}@`)
+}
 
 function userSlugFromEmail(email) {
   // juan.perez@allaria.com -> juan-perez
@@ -169,10 +175,10 @@ export async function executeSandboxTool(name, args, userId) {
         chatId = chat.id
       }
 
-      // 4. Llamar al sandbox agent
+      // 4. Llamar al sandbox agent (con token embebido en la URL para que git push funcione)
       let port
       try {
-        const result = await sandboxCreateProject(userSlug, args.name, args.title, repoUrl)
+        const result = await sandboxCreateProject(userSlug, args.name, args.title, repoUrlWithAuth(repoUrl))
         port = result.port
       } catch (err) {
         // Rollback DB + Chat + GitLab
@@ -270,7 +276,7 @@ export async function executeSandboxTool(name, args, userId) {
     case 'sandbox_push': {
       const project = await prisma.project.findFirst({ where: { userId, name: args.projectName } })
       if (!project) throw new Error(`Proyecto "${args.projectName}" no encontrado`)
-      const result = await sandboxPush(userSlug, args.projectName, args.message)
+      const result = await sandboxPush(userSlug, args.projectName, args.message, repoUrlWithAuth(project.repoUrl))
       return { ...result, repoUrl: project.repoUrl }
     }
 

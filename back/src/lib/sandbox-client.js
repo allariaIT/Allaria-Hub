@@ -44,10 +44,10 @@ export async function sandboxBuild(userSlug, name) {
   return sandboxRequest(`/projects/${userSlug}/${name}/build`, { method: 'POST' })
 }
 
-export async function sandboxPush(userSlug, name, message) {
+export async function sandboxPush(userSlug, name, message, repoUrl) {
   return sandboxRequest(`/projects/${userSlug}/${name}/push`, {
     method: 'POST',
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, repoUrl }),
   })
 }
 

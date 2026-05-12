@@ -306,12 +306,12 @@ projectsRouter.post('/:user/:name/stop', async (req, res) => {
 // POST /projects/:user/:name/push - Git push
 projectsRouter.post('/:user/:name/push', (req, res) => {
   const { user, name } = req.params
-  const { message = 'Update from Allaria Hub' } = req.body
+  const { message = 'Update from Allaria Hub', repoUrl } = req.body
   const projectDir = path.join(PROJECTS_DIR, user, name)
   if (!fs.existsSync(projectDir)) {
     return res.status(404).json({ error: 'Proyecto no encontrado' })
   }
-  const result = gitCommitAndPush(projectDir, message)
+  const result = gitCommitAndPush(projectDir, message, repoUrl)
   res.json(result)
 })
 
