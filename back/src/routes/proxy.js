@@ -6,7 +6,7 @@ export const proxyRouter = Router()
 
 const LITELLM_URL = process.env.LITELLM_URL || 'https://litellm.allaria.xyz/v1/chat/completions'
 const LITELLM_KEY = process.env.LITELLM_KEY
-const MAX_TOOL_ROUNDS = 10
+const MAX_TOOL_ROUNDS = 20
 
 function extractTextForDb(content) {
   if (typeof content === 'string') return content
@@ -197,7 +197,7 @@ proxyRouter.post('/stream', async (req, res) => {
   }
 
   try {
-    const { chatId, model, messages, connectors = [], temperature = 0.7, max_tokens = 4096 } = req.body
+    const { chatId, model, messages, connectors = [], temperature = 0.7, max_tokens = 8192 } = req.body
 
     if (!chatId || !messages?.length) {
       send({ type: 'error', message: 'chatId y messages son requeridos' })
