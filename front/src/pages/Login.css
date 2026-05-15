@@ -112,3 +112,92 @@
   color: var(--text-tertiary);
   line-height: 1.5;
 }
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 12px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-light);
+}
+
+.login-alt-btn {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  transition: color 0.2s;
+}
+
+.login-alt-btn:hover {
+  color: var(--text-secondary);
+}
+
+.login-password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  animation: scaleIn 0.2s ease;
+}
+
+.login-password-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.login-password-input:focus {
+  border-color: var(--allaria-navy);
+}
+
+.login-password-input:disabled {
+  opacity: 0.6;
+}
+
+.login-password-error {
+  font-size: 13px;
+  color: #e55;
+  margin: 0;
+}
+
+.login-password-submit {
+  padding: 10px;
+  background: var(--allaria-navy);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.login-password-submit:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.login-password-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

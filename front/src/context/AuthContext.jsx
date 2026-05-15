@@ -50,6 +50,13 @@ export function AuthProvider({ children }) {
     }
   }, [handleCredentialResponse])
 
+  const signInWithPassword = useCallback(async (password) => {
+    const data = await api.authPassword(password)
+    setToken(data.token)
+    localStorage.setItem('allaria_user', JSON.stringify(data.user))
+    setUser(data.user)
+  }, [])
+
   const signIn = useCallback(() => {
     if (window.google) {
       window.google.accounts.id.prompt()
@@ -66,7 +73,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, isLoading, signIn, signInWithPassword, signOut }}>
       {children}
     </AuthContext.Provider>
   )

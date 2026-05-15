@@ -34,6 +34,12 @@ export const api = {
       body: JSON.stringify({ credential }),
     }),
 
+  authPassword: (password) =>
+    request('/api/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+
   getStats: () => request('/api/stats'),
 
   getChats: () => request('/api/chats'),

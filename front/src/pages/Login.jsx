@@ -1,15 +1,18 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import './Login.css'
 
 export default function Login() {
-  const { user, isLoading, signIn } = useAuth()
+  const { user, isLoading, signIn, signInWithPassword } = useAuth()
   const googleBtnRef = useRef(null)
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [password, setPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [isPasswordLoading, setIsPasswordLoading] = useState(false)
 
   useEffect(() => {
     if (isLoading || user) return
-    // Render the Google Sign-In button
     if (window.google && googleBtnRef.current) {
       window.google.accounts.id.renderButton(googleBtnRef.current, {
         type: 'standard',
@@ -22,6 +25,19 @@ export default function Login() {
       })
     }
   }, [isLoading, user])
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault()
+    setPasswordError('')
+    setIsPasswordLoading(true)
+    try {
+      await signInWithPassword(password)
+    } catch (err) {
+      setPasswordError(err.message || 'Contraseña incorrecta')
+    } finally {
+      setIsPasswordLoading(false)
+    }
+  }
 
   if (user) return <Navigate to="/" replace />
 
@@ -45,6 +61,42 @@ export default function Login() {
             <div className="login-spinner" />
             <span>Cargando...</span>
           </div>
+        )}
+
+        <div className="login-divider">
+          <span>o</span>
+        </div>
+
+        <button
+          className="login-alt-btn"
+          onClick={() => { setShowPasswordForm(v => !v); setPasswordError('') }}
+          type="button"
+        >
+          Otros métodos {showPasswordForm ? '▲' : '▼'}
+        </button>
+
+        {showPasswordForm && (
+          <form className="login-password-form" onSubmit={handlePasswordSubmit}>
+            <input
+              className="login-password-input"
+              type="password"
+              placeholder="Contraseña"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoFocus
+              disabled={isPasswordLoading}
+            />
+            {passwordError && (
+              <p className="login-password-error">{passwordError}</p>
+            )}
+            <button
+              className="login-password-submit"
+              type="submit"
+              disabled={isPasswordLoading || !password}
+            >
+              {isPasswordLoading ? 'Ingresando...' : 'Ingresar'}
+            </button>
+          </form>
         )}
 
         <p className="login-footer">
