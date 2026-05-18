@@ -39,6 +39,9 @@ kind: Service
 metadata:
   name: front
   namespace: allaria-hub
+  annotations:
+    kubernetes.io/elb.class: "union"
+    kubernetes.io/elb.autocreate: '{"type":"public","bandwidth_name":"allaria-hub-lb","bandwidth_chargemode":"traffic","bandwidth_size":5,"bandwidth_sharetype":"PER","eip_type":"5_bgp"}'
 spec:
   type: LoadBalancer
   selector:
