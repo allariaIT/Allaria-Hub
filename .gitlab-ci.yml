@@ -1,0 +1,73 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  IMAGE_BACK: "$SWR_REGISTRY/$SWR_ORGANIZATION/allaria-hub-back"
+  IMAGE_FRONT: "$SWR_REGISTRY/$SWR_ORGANIZATION/allaria-hub-front"
+  NAMESPACE: "allaria-hub"
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_DRIVER: overlay2
+
+# ── BUILD ──────────────────────────────────────────────────────────────────────
+
+.build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  before_script:
+    - echo "$SWR_PASSWORD" | docker login "$SWR_REGISTRY" -u "$SWR_USERNAME" --password-stdin
+
+build-back:
+  extends: .build
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - docker build --platform linux/amd64 -t "$IMAGE_BACK:$CI_COMMIT_SHORT_SHA" -t "$IMAGE_BACK:latest" ./back
+    - docker push "$IMAGE_BACK:$CI_COMMIT_SHORT_SHA"
+    - docker push "$IMAGE_BACK:latest"
+
+build-front:
+  extends: .build
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - docker build --platform linux/amd64 -t "$IMAGE_FRONT:$CI_COMMIT_SHORT_SHA" -t "$IMAGE_FRONT:latest" ./front
+    - docker push "$IMAGE_FRONT:$CI_COMMIT_SHORT_SHA"
+    - docker push "$IMAGE_FRONT:latest"
+
+# ── DEPLOY ─────────────────────────────────────────────────────────────────────
+
+.deploy:
+  stage: deploy
+  image:
+    name: bitnami/kubectl:latest
+    entrypoint: [""]
+  before_script:
+    - echo "$KUBE_CONFIG_B64" | base64 -d > /tmp/kubeconfig
+    - export KUBECONFIG=/tmp/kubeconfig
+
+deploy-back:
+  extends: .deploy
+  needs: [build-back]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - kubectl apply -f k8s/namespace.yaml
+    - kubectl apply -f k8s/back-secret.yaml
+    - kubectl apply -f k8s/back-deployment.yaml
+    - kubectl set image deployment/back back="$IMAGE_BACK:$CI_COMMIT_SHORT_SHA" -n $NAMESPACE
+    - kubectl rollout status deployment/back -n $NAMESPACE --timeout=120s
+
+deploy-front:
+  extends: .deploy
+  needs: [build-front]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - kubectl apply -f k8s/namespace.yaml
+    - kubectl apply -f k8s/front-deployment.yaml
+    - kubectl apply -f k8s/ingress.yaml
+    - kubectl set image deployment/front front="$IMAGE_FRONT:$CI_COMMIT_SHORT_SHA" -n $NAMESPACE
+    - kubectl rollout status deployment/front -n $NAMESPACE --timeout=120s
