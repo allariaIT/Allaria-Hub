@@ -15,6 +15,10 @@ dist-ssr
 # Env
 .env
 
+# K8s secrets y kubeconfigs — nunca al repo
+k8s/back-secret.yaml
+*kubeconfig*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

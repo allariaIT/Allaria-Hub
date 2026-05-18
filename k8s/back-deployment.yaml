@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: back
+  namespace: allaria-hub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: back
+  template:
+    metadata:
+      labels:
+        app: back
+    spec:
+      containers:
+        - name: back
+          image: swr.la-south-2.myhuaweicloud.com/allaria-sandbox/allaria-hub-back:latest
+          ports:
+            - containerPort: 3098
+          envFrom:
+            - secretRef:
+                name: back-secret
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3098
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3098
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: back
+  namespace: allaria-hub
+spec:
+  selector:
+    app: back
+  ports:
+    - port: 3098
+      targetPort: 3098

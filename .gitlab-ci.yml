@@ -56,7 +56,6 @@ deploy-back:
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
     - kubectl apply -f k8s/namespace.yaml
-    - kubectl apply -f k8s/back-secret.yaml
     - kubectl apply -f k8s/back-deployment.yaml
     - kubectl set image deployment/back back="$IMAGE_BACK:$CI_COMMIT_SHORT_SHA" -n $NAMESPACE
     - kubectl rollout status deployment/back -n $NAMESPACE --timeout=120s
