@@ -40,8 +40,9 @@ metadata:
   name: front
   namespace: allaria-hub
 spec:
+  type: LoadBalancer
   selector:
     app: front
   ports:
-    - port: 3097
+    - port: 80
       targetPort: 3097
