@@ -13,6 +13,8 @@ spec:
       labels:
         app: back
     spec:
+      imagePullSecrets:
+        - name: swr-pull-secret
       containers:
         - name: back
           image: swr.la-south-2.myhuaweicloud.com/allaria-sandbox/allaria-hub-back:latest
