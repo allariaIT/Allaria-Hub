@@ -1,6 +1,50 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { getToolsForConnectors, executeTool, CONFIRMABLE_TOOLS } from '../lib/tools.js'
+import { createSessionPod, waitForPodReady } from '../lib/k8s.js'
+import { pollGitlabPipeline } from '../lib/sandbox-tools.js'
+
+const GITLAB_TOKEN = process.env.GITLAB_TOKEN
+
+function repoUrlWithAuth(url) {
+  if (!url || !GITLAB_TOKEN) return url
+  const base = url.endsWith('.git') ? url : url + '.git'
+  return base.replace(/https:\/\/gitlab\.allaria\.xyz/, `https://oauth2:${GITLAB_TOKEN}@gitlab.allaria.xyz`)
+}
+
+async function getOrCreateSession(userId, projectId) {
+  let session = await prisma.session.findFirst({
+    where: { userId, projectId, status: { not: 'dead' } },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  if (session) return session
+
+  const project = await prisma.project.findFirst({ where: { id: projectId, userId } })
+  if (!project) throw new Error('Proyecto no encontrado')
+
+  const sessionId = crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+  const podName = await createSessionPod(
+    sessionId,
+    repoUrlWithAuth(project.repoUrl),
+    process.env.LITELLM_URL,
+    process.env.LITELLM_KEY,
+  )
+
+  let newSession
+  try {
+    newSession = await prisma.session.create({
+      data: { id: sessionId, userId, projectId, podName, status: 'starting' },
+    })
+  } catch (dbErr) {
+    // Rollback pod on DB failure
+    const { deleteSessionPod } = await import('../lib/k8s.js')
+    deleteSessionPod(podName).catch(() => {})
+    throw dbErr
+  }
+
+  return newSession
+}
 
 export const proxyRouter = Router()
 
@@ -197,7 +241,7 @@ proxyRouter.post('/stream', async (req, res) => {
   }
 
   try {
-    const { chatId, model, messages, connectors = [], temperature = 0.7, max_tokens = 8192 } = req.body
+    const { chatId, model, messages, connectors = [], temperature = 0.7, max_tokens = 8192, projectId } = req.body
 
     if (!chatId || !messages?.length) {
       send({ type: 'error', message: 'chatId y messages son requeridos' })
@@ -212,6 +256,12 @@ proxyRouter.post('/stream', async (req, res) => {
       await prisma.message.create({
         data: { chatId, role: 'user', content: extractTextForDb(lastUserMsg.content) },
       })
+    }
+
+    // Branch workspace con session pod
+    if (projectId) {
+      await handleWorkspaceStream(req, res, { chatId, messages, projectId, send, heartbeat })
+      return
     }
 
     const tools = getToolsForConnectors(connectors)
@@ -274,6 +324,104 @@ proxyRouter.post('/stream', async (req, res) => {
     if (clientConnected) res.end()
   }
 })
+
+async function handleWorkspaceStream(req, res, { chatId, messages, projectId, send, heartbeat }) {
+  try {
+    const chat = await prisma.chat.findFirst({ where: { id: chatId, userId: req.user.id } })
+    if (!chat) { send({ type: 'error', message: 'Chat no encontrado' }); return }
+
+    const lastUserMsg = messages[messages.length - 1]
+
+    // Obtener o crear sesión
+    let session
+    try {
+      session = await getOrCreateSession(req.user.id, projectId)
+    } catch (err) {
+      send({ type: 'error', message: `Error iniciando sesión: ${err.message}` })
+      return
+    }
+
+    // Esperar que el pod esté ready
+    let podIP = session.podIP
+    if (!podIP || session.status === 'starting') {
+      send({ type: 'thinking', message: 'Preparando el agente...' })
+      try {
+        podIP = await waitForPodReady(session.podName, 60_000)
+        await prisma.session.update({
+          where: { id: session.id },
+          data: { podIP, status: 'ready', lastActivity: new Date() },
+        })
+      } catch (err) {
+        send({ type: 'error', message: `El agente no pudo iniciar: ${err.message}` })
+        return
+      }
+    } else {
+      await prisma.session.update({ where: { id: session.id }, data: { lastActivity: new Date() } })
+    }
+
+    // Proxy al pod
+    const podRes = await fetch(`http://${podIP}:3200/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: lastUserMsg.content,
+        history: messages.slice(0, -1),
+      }),
+      signal: AbortSignal.timeout(300_000),
+    })
+
+    if (!podRes.ok) {
+      send({ type: 'error', message: `Pod respondió ${podRes.status}` })
+      return
+    }
+
+    // Pipe SSE del pod al cliente
+    const reader = podRes.body.getReader()
+    const decoder = new TextDecoder()
+    let assistantContent = ''
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop()
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const data = JSON.parse(line.slice(6))
+          send(data)
+          if (data.type === 'done') assistantContent = data.content
+          if (data.type === 'pushed') {
+            // Update project status and poll CI
+            const project = await prisma.project.findFirst({ where: { id: projectId } })
+            if (project?.gitlabId) {
+              await prisma.project.update({ where: { id: project.id }, data: { status: 'creating' } })
+              pollGitlabPipeline(project.gitlabId, new Date()).then(async (result) => {
+                await prisma.project.update({
+                  where: { id: project.id },
+                  data: { status: result.ok ? 'running' : 'error' },
+                })
+              }).catch(() => {})
+            }
+          }
+        } catch {}
+      }
+    }
+
+    if (assistantContent) {
+      await prisma.message.create({
+        data: { chatId, role: 'assistant', content: assistantContent, model: 'claude-sonnet-4-5' },
+      })
+      await prisma.chat.update({ where: { id: chatId }, data: { updatedAt: new Date() } })
+    }
+  } catch (err) {
+    console.error('[workspace stream] error:', err.message)
+    send({ type: 'error', message: err.message })
+  }
+}
 
 // POST /api/chat/confirm - Confirmar o rechazar acciones pendientes
 proxyRouter.post('/confirm', async (req, res) => {
