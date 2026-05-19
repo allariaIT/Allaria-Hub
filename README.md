@@ -1,170 +1,187 @@
 # Allaria Hub IA
 
-Plataforma corporativa de inteligencia artificial de Allaria. Chat multi-modelo con conectores de Google (Gmail, Calendar, Tasks, Drive), hub de proyectos y documentacion interna.
+Plataforma corporativa de inteligencia artificial de Allaria. Chat multi-modelo con conectores de Google (Gmail, Calendar, Tasks, Drive), hub de proyectos sandbox con agente de codigo, y documentacion interna.
 
-**URL**: https://ia.allaria.xyz
+**URL**: https://allaria-hub.allaria.xyz (tambien accesible como https://ia.allaria.xyz)
+
+---
 
 ## Arquitectura
 
 ```
-ia.allaria.xyz (ELB Huawei)
-       |
-       v
-   nginx (3097) ---- front (React + Vite)
-       |
-       | /api/*
-       v
-   Express (3098) ---- back (Node.js + Prisma)
-       |                    |
-       v                    v
-   LiteLLM              PostgreSQL
-   (litellm.allaria.xyz)  (172.26.20.32)
-       |
-       v
-   Google APIs (Gmail, Calendar, Tasks, Drive)
+Internet
+  |
+  v
+ELB Huawei (23.227.176.14)
+  |
+  +---> sandbox-nginx (.101:3099)
+  |       |
+  |       +---> proyectos-sandbox.allaria.xyz  --> contenedores de usuario (puertos 4001-4100 en .101)
+  |       +---> allaria-hub.allaria.xyz        --> CCE NodePort 30097
+  |
+  v
+CCE Cluster Huawei (la-south-2) / namespace: allaria-hub
+  |
+  +---> front pod (React+Vite, nginx :3097)
+  |       - archivos estaticos
+  |       - /api/* --> back pod
+  |
+  +---> back pod (Express+Prisma, :3098)
+          |
+          +---> PostgreSQL 172.30.200.114:5432/allaria_hub
+          +---> LiteLLM http://172.30.200.101:4000/v1/chat/completions
+          +---> Sandbox Agent http://172.30.200.101:3100
+          +---> Google APIs (Gmail, Calendar, Tasks, Drive)
+
+Sandbox Agent (172.30.200.101:3100)
+  - Crea proyectos Vite+React con scaffold
+  - Hace git push a GitLab (gitlab.allaria.xyz / grupo allaria-sandbox)
+  - CI pipeline (docker-deployment.yml) buildea imagen SWR y deploya en .101
+  - sandbox-nginx expone cada proyecto en proyectos-sandbox.allaria.xyz/{userSlug}/{name}/
 ```
+
+---
 
 ## Stack
 
 | Componente | Tecnologia |
 |-----------|------------|
-| Frontend | React 19, Vite 8, React Router 7, React Markdown, Lucide Icons |
-| Backend | Node.js, Express 5, Prisma ORM, googleapis |
-| Base de datos | PostgreSQL en 172.26.20.32 |
-| LLM Gateway | LiteLLM en litellm.allaria.xyz |
+| Frontend | React 19, Vite 8, React Router 7 |
+| Backend | Node.js, Express 5, Prisma ORM |
+| Base de datos | PostgreSQL 172.30.200.114 |
+| LLM Gateway | LiteLLM http://172.30.200.101:4000 |
 | Auth | Google OAuth2 (login + conectores incrementales) |
-| Deploy | Docker, Docker Compose, Huawei Cloud ELB |
+| Deploy back/front | GitLab CI -> imagen SWR -> kubectl set image en CCE |
+| Deploy sandbox-agent | Docker Compose en 172.30.200.101 |
+| Container registry | Huawei SWR |
 
-## Estructura del Monorepo
+---
+
+## Estructura del monorepo
 
 ```
 Allaria-Hub/
-|-- docker-compose.yml
-|-- .github/workflows/
-|
-|-- front/                          # Puerto 3097
-|   |-- Dockerfile
-|   |-- src/
-|   |   |-- components/
-|   |   |   |-- Layout.jsx         # Sidebar con nav + user info
-|   |   |   |-- ProtectedRoute.jsx
-|   |   |   |-- ConnectorPicker.jsx # UI conectores Google (menu dropdown)
-|   |   |   |-- ConnectorPicker.css
-|   |   |-- context/
-|   |   |   |-- AuthContext.jsx     # Google OAuth provider
-|   |   |-- lib/
-|   |   |   |-- api.js             # HTTP client para el backend
-|   |   |-- pages/
-|   |   |   |-- Home.jsx           # Dashboard
-|   |   |   |-- Chat.jsx           # Chat multi-modelo + conectores + confirmaciones
-|   |   |   |-- Chat.css
-|   |   |   |-- Projects.jsx       # Hub de proyectos
-|   |   |   |-- Docs.jsx           # Documentacion interna
-|   |   |   |-- Login.jsx          # Login con Google
-|   |   |-- data/
-|   |       |-- mockData.js
-|   |-- public/assets/
-|
-|-- back/                           # Puerto 3098
-    |-- Dockerfile
-    |-- prisma/
-    |   |-- schema.prisma           # User, Chat, Message, UserConnection
-    |-- src/
-        |-- index.js                # Express server + rutas
-        |-- lib/
-        |   |-- prisma.js           # Prisma client
-        |   |-- google-oauth.js     # Helper OAuth2 (auth URL, exchange, authed client)
-        |   |-- gmail.js            # Gmail API wrapper
-        |   |-- calendar.js         # Calendar API wrapper
-        |   |-- gtasks.js           # Tasks API wrapper
-        |   |-- drive.js            # Drive API wrapper
-        |   |-- tools.js            # Tool definitions + executor + confirmables
-        |-- middleware/
-        |   |-- auth.js             # Verificacion de session token
-        |-- routes/
-            |-- auth.js             # POST /api/auth/google
-            |-- chats.js            # CRUD /api/chats
-            |-- proxy.js            # Proxy LiteLLM + tool calling + confirmaciones
-            |-- connectors.js       # OAuth conectores Google
+|-- front/              # React 19 + Vite 8, puerto 3097
+|-- back/               # Express 5 + Prisma, puerto 3098
+|-- sandbox-agent/      # Express 5, puerto 3100 en .101
+|-- k8s/                # Manifests CCE (namespace, deployments, services, ingress, secrets)
+|-- docs/               # Documentacion tecnica
+|-- .gitlab-ci.yml      # CI/CD: build-back, build-front, deploy-back, deploy-front
 ```
+
+### front/src/
+
+```
+components/
+  Layout.jsx             # Sidebar con nav + user info
+  ProtectedRoute.jsx
+  ConnectorPicker.jsx    # Menu conectores Google
+context/
+  AuthContext.jsx        # Google OAuth provider
+lib/
+  api.js                 # HTTP client para el backend
+pages/
+  Login.jsx
+  Home.jsx
+  Chat.jsx               # Chat multi-modelo + conectores + confirmaciones
+  Projects.jsx           # Hub de proyectos + Mis Proyectos + modal crear
+  ProjectWorkspace.jsx   # Workspace con agente de codigo + SSE streaming + sidebar
+  Docs.jsx
+```
+
+### back/src/
+
+```
+index.js                 # Express server + rutas + job reconcileProjects
+middleware/
+  auth.js                # Verificacion session token (SHA256)
+lib/
+  prisma.js
+  gitlab.js              # GitLab API client
+  sandbox-client.js      # HTTP client al sandbox agent (timeout 10s)
+  sandbox-tools.js       # Tool definitions + executeSandboxTool + polling async
+  tools.js               # Tools por conector; workspaceSandbox excluye sandbox_create_project
+  google-oauth.js
+  gmail.js / calendar.js / gtasks.js / drive.js
+routes/
+  auth.js                # POST /api/auth/google
+  chats.js               # CRUD /api/chats (excluye chats vinculados a proyectos)
+  projects.js            # CRUD /api/projects + community + workspace + publish + star
+  proxy.js               # Proxy LiteLLM + tool calling + SSE streaming (POST /api/chat/stream)
+  connectors.js          # OAuth conectores Google
+```
+
+### sandbox-agent/src/
+
+```
+index.js
+lib/
+  scaffold.js            # Template Vite+React (nginx.conf, /health)
+  docker.js              # Operaciones Docker via CLI spawn (NO dockerode)
+  nginx.js               # Genera config sandbox-nginx y recarga via spawn
+  git.js                 # git init, commit, push (spawnSync)
+routes/
+  projects.js            # Todos los endpoints; build/rebuild async con semaforo
+```
+
+---
 
 ## Funcionalidades
 
-### Chat IA Multi-Modelo
-- **3 providers**: Gemini (Google), ChatGPT (OpenAI), Claude (Anthropic)
-- **5 modelos**: Gemini Flash, Gemini Pro, GPT-4 Turbo, GPT-4o, Claude Sonnet 4.5
-- Selector visual con logos y colores por provider
-- **Archivos adjuntos**: imagenes, PDFs, audio, video, codigo, texto
-- Auto-switch a Gemini al adjuntar archivos (mejor soporte multimodal)
-- Historial de conversaciones persistido en PostgreSQL
-- Crear, renombrar, eliminar chats
-- Auto-titulo basado en el primer mensaje
+### Chat IA multi-modelo
+
+- Chat con historial persistido en PostgreSQL
+- Streaming via SSE (POST /api/chat/stream)
+- Heartbeat cada 15s; continua despues de disconnect del cliente, poll al reconectar
+- Auto-titulo con primer mensaje (50 chars)
 - Markdown rendering con syntax highlight
-- Typing indicator
+- Adjuntos: se envia base64 a LiteLLM; en DB se guarda solo la referencia `[adjunto nombre]`
+- MAX_TOOL_ROUNDS: 20 rondas maximas de tool calling por request
+- max_tokens: 8192 en el stream endpoint
 
-### Conectores de Google
+### Conectores Google (OAuth incremental)
 
-Cada conector se conecta de forma independiente via **OAuth incremental** - los permisos se piden al momento de activar el conector por primera vez.
+Los permisos se piden al activar cada conector por primera vez. Una vez conectado, el usuario puede activarlo/desactivarlo en cada chat.
 
-| Conector | Scopes | Tools | Confirmacion |
-|----------|--------|-------|-------------|
-| **Gmail** | gmail.readonly, gmail.send, gmail.modify | `gmail_list`, `gmail_read`, `gmail_send`, `gmail_search` | `gmail_send` |
-| **Calendar** | calendar.readonly, calendar.events | `calendar_list`, `calendar_create`, `calendar_search` | `calendar_create` |
-| **Tasks** | tasks | `tasks_list`, `tasks_create`, `tasks_complete`, `tasks_search` | `tasks_create`, `tasks_complete` |
-| **Drive** | drive.readonly, drive.metadata.readonly | `drive_list`, `drive_search`, `drive_get` | Ninguna (solo lectura) |
+| Conector | Tools | Requiere confirmacion |
+|----------|-------|-----------------------|
+| Gmail | gmail_list, gmail_read, gmail_send, gmail_search | gmail_send |
+| Calendar | calendar_list, calendar_create, calendar_search | calendar_create |
+| Tasks | tasks_list, tasks_create, tasks_complete, tasks_search | tasks_create, tasks_complete |
+| Drive | drive_list, drive_search, drive_get | ninguna (solo lectura) |
 
-**UI del picker:**
-- Boton con icono de plug en el header del chat
-- Menu dropdown con cada conector: logo, nombre, descripcion
-- Estados: no conectado (boton "Conectar") / conectado (toggle on/off + "Desconectar")
-- Badge inline con dot verde pulsante cuando un conector esta activo
+### Confirmacion de acciones destructivas
 
-### Confirmacion de Acciones
+Las tools marcadas como confirmables no se ejecutan hasta que el usuario aprueba la accion:
 
-Las tools que modifican datos requieren **confirmacion explicita** del usuario antes de ejecutarse. El backend pausa la ejecucion y devuelve una preview al frontend.
-
-**Flujo:**
-```
-1. LLM pide ejecutar gmail_send({to, subject, body})
-2. Backend detecta que es confirmable -> NO la ejecuta
-3. Devuelve _pendingConfirmations con los detalles
-4. Frontend muestra card con preview:
-   - Para: destinatario@email.com
-   - Asunto: ...
-   - Cuerpo: (texto completo)
-5. Botones "Confirmar" (verde) / "Cancelar" (gris)
-6. Si confirma -> POST /api/chat/confirm -> se ejecuta
-7. Si cancela -> el LLM recibe "El usuario cancelo esta accion"
-```
-
-**Tools confirmables:** `gmail_send`, `calendar_create`, `tasks_create`, `tasks_complete`
-
-### Tool Calling - Flujo Completo
-
-```
-1. Usuario envia mensaje con conectores activos
-2. Backend arma request a LiteLLM con tools[] segun conectores
-3. LiteLLM responde con tool_calls
-4. Si la tool es confirmable -> pausar, devolver preview al frontend
-5. Si no -> ejecutar con tokens del usuario autenticado
-6. Resultado vuelve al LLM -> puede pedir mas tools (loop max 5 rondas)
-7. Respuesta final se guarda en DB y se devuelve al frontend
-```
-
-### Autenticacion
-- Google OAuth via Google Identity Services (One Tap)
-- Session token persistente (SHA256 de Google sub + Client ID)
-- Upsert de usuario en DB al loguearse
+1. LLM emite tool_call para una accion confirmable
+2. Backend pausa y devuelve `_pendingConfirmations` con preview al frontend
+3. Frontend muestra card con detalle (destinatario, asunto, cuerpo, etc.)
+4. Usuario confirma o cancela
+5. POST /api/chat/confirm ejecuta o rechaza la accion
 
 ### Hub de Proyectos
-- Grid de proyectos con cards (titulo, autor, descripcion, tags)
-- Busqueda y filtro por estado
 
-### Documentacion
-- 4 secciones con sidebar de navegacion
-- Buscador de articulos
+- Crear mini-apps React via agente LLM (describe que queres y el agente genera el codigo) o via modal directo con nombre y descripcion
+- Proyectos privados por defecto; el dueno puede publicarlos
+- Stars: 1 por usuario por proyecto
+- Preview publica: `https://proyectos-sandbox.allaria.xyz/{userSlug}/{name}/`
 
-## API del Backend
+### Workspace por proyecto (agente de codigo)
+
+Cada proyecto tiene un workspace con un agente LLM especializado. El agente sigue este flujo obligatorio:
+
+1. `sandbox_read_file` -- leer el archivo antes de modificar
+2. `sandbox_write_file` -- escribir el nuevo contenido
+3. `sandbox_build` -- buildear y deployar el contenedor en .101
+4. `sandbox_push` -- hacer git push a GitLab (automatico, sin pedir confirmacion)
+5. Confirmar al usuario con la URL de preview
+
+El agente usa el conector `workspaceSandbox` (que excluye `sandbox_create_project`, reservada para la creacion inicial).
+
+---
+
+## API del backend
 
 ### Auth
 | Metodo | Ruta | Descripcion |
@@ -174,123 +191,149 @@ Las tools que modifican datos requieren **confirmacion explicita** del usuario a
 ### Chats
 | Metodo | Ruta | Descripcion |
 |--------|------|-------------|
-| GET | `/api/chats` | Listar chats del usuario con mensajes |
+| GET | `/api/chats` | Listar chats del usuario (excluye chats de proyectos) |
 | POST | `/api/chats` | Crear nuevo chat |
 | GET | `/api/chats/:id` | Obtener chat con mensajes |
 | PATCH | `/api/chats/:id` | Renombrar chat |
 | DELETE | `/api/chats/:id` | Eliminar chat |
-| DELETE | `/api/chats/:id/messages` | Limpiar mensajes de un chat |
+| DELETE | `/api/chats/:id/messages` | Limpiar mensajes |
 
-### Chat IA (Proxy LiteLLM)
+### Chat IA
 | Metodo | Ruta | Descripcion |
 |--------|------|-------------|
-| POST | `/api/chat/completions` | Proxy a LiteLLM + tool calling. Acepta `connectors[]` |
-| POST | `/api/chat/confirm` | Confirmar/rechazar accion pendiente |
+| POST | `/api/chat/stream` | Proxy LiteLLM + tool calling, responde SSE |
+| POST | `/api/chat/confirm` | Confirmar o rechazar accion pendiente |
 
-### Conectores
+### Proyectos
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET | `/api/projects` | Proyectos del usuario |
+| POST | `/api/projects` | Crear proyecto (trigerea agente sandbox) |
+| GET | `/api/projects/community` | Proyectos publicos |
+| GET | `/api/projects/:id` | Detalle de proyecto |
+| PATCH | `/api/projects/:id` | Editar proyecto |
+| DELETE | `/api/projects/:id` | Eliminar proyecto |
+| POST | `/api/projects/:id/publish` | Publicar |
+| POST | `/api/projects/:id/unpublish` | Despublicar |
+| POST | `/api/projects/:id/star` | Dar estrella |
+| DELETE | `/api/projects/:id/star` | Quitar estrella |
+| GET | `/api/projects/:id/chat` | Chat del workspace del proyecto |
+
+### Conectores Google
 | Metodo | Ruta | Descripcion |
 |--------|------|-------------|
 | GET | `/api/connectors` | Listar conexiones del usuario |
 | POST | `/api/connectors/auth` | Iniciar OAuth para un provider |
-| GET | `/api/connectors/callback` | Callback de Google OAuth (publico) |
-| DELETE | `/api/connectors/:provider` | Desconectar un provider |
+| GET | `/api/connectors/callback` | Callback OAuth (publico) |
+| DELETE | `/api/connectors/:provider` | Desconectar provider |
 
-### Health
-| Metodo | Ruta | Descripcion |
-|--------|------|-------------|
-| GET | `/health` | Health check |
+---
 
-## Base de Datos
+## Base de datos
 
-### Modelos Prisma
+Esquema gestionado con Prisma (sin migration history, se sincroniza con `prisma db push`).
 
-**User**
-- `id` (String, PK) - Google sub ID
-- `email` (unique), `name`, `picture`
-- Relaciones: `chats[]`, `connections[]`
+**User** -- id (Google sub), email, name, picture. Relaciones: chats, connections, projects, stars.
 
-**Chat**
-- `id` (cuid), `title` (default: "Nuevo chat"), `userId`
-- Relacion: `messages[]`
+**Chat** -- id (cuid), title, userId. Puede estar vinculado a un Project (chatId en Project).
 
-**Message**
-- `id` (cuid), `chatId`, `role` (user/assistant), `content`, `model?`
-- Cascade delete al borrar chat
+**Message** -- id, chatId, role, content, model. Cascade delete con el chat.
 
-**UserConnection**
-- `id` (cuid), `userId`, `provider` (gmail/calendar/tasks/drive)
-- `accessToken`, `refreshToken`, `scopes`, `expiresAt`
-- Constraint unique: `[userId, provider]`
-- Los tokens se auto-refrescan cuando expiran via listener `tokens`
+**UserConnection** -- userId + provider (gmail/calendar/tasks/drive). Guarda accessToken, refreshToken, scopes, expiresAt. Unique [userId, provider]. Los tokens se auto-refrescan.
 
-## Variables de Entorno
+**Project** -- id, name, userSlug, userId, description, chatId, port, status, isPublic, gitlabProjectId.
 
-### back/.env (no esta en el repo - gitignore)
-```env
-DATABASE_URL=postgresql://user:pass@host:5432/allaria_hub
-GOOGLE_CLIENT_ID=...apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-...
-GOOGLE_REDIRECT_URI=https://ia.allaria.xyz/api/connectors/callback
-LITELLM_URL=https://litellm.allaria.xyz/v1/chat/completions
-LITELLM_KEY=sk-...
-PORT=3098
-CORS_ORIGIN=https://ia.allaria.xyz
-FRONT_URL=https://ia.allaria.xyz
+**ProjectStar** -- userId + projectId. Unique [userId, projectId].
+
+---
+
+## Variables de entorno del backend
+
+Las variables viven en el secret de Kubernetes `back-secret` en el namespace `allaria-hub`. No hay `.env` en el repo.
+
+```
+DATABASE_URL        postgresql://root:***@172.30.200.114:5432/allaria_hub
+LITELLM_URL         http://172.30.200.101:4000/v1/chat/completions
+LITELLM_KEY         sk-allaria-***
+SANDBOX_AGENT_URL   http://172.30.200.101:3100
+SANDBOX_AGENT_KEY   5f983968...
+SANDBOX_PREVIEW_URL https://proyectos-sandbox.allaria.xyz
+GITLAB_URL          https://gitlab.allaria.xyz
+GITLAB_GROUP_ID     54
+CORS_ORIGIN         https://allaria-hub.allaria.xyz
+FRONT_URL           https://allaria-hub.allaria.xyz
+GOOGLE_CLIENT_ID    ...apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET GOCSPX-...
+GOOGLE_REDIRECT_URI https://allaria-hub.allaria.xyz/api/connectors/callback
+PORT                3098
 ```
 
-### Google Cloud Console
-- APIs habilitadas: Gmail, Calendar, Tasks, Drive
-- OAuth 2.0 Client ID (Web application)
-- Authorized redirect URI: `https://ia.allaria.xyz/api/connectors/callback`
-- Authorized JavaScript origins: `https://ia.allaria.xyz`
+Para el sandbox-agent las variables viven en `sandbox-agent/.env` en el servidor .101.
+
+---
 
 ## Deploy
 
-### Actualizar
+### back y front (CCE)
+
+Push a `main` en GitLab dispara el pipeline `.gitlab-ci.yml`:
+1. `build-back` / `build-front`: buildea imagen Docker y la sube a Huawei SWR
+2. `deploy-back` / `deploy-front`: `kubectl set image` en el deployment del namespace `allaria-hub`
+
+No hay intervencion manual. El pod nuevo levanta y el viejo se termina.
+
+Para sincronizar el schema de DB despues de un cambio en `prisma/schema.prisma`:
+
 ```bash
-git pull && docker compose up -d --build
+kubectl exec -n allaria-hub deployment/back -- npx prisma db push
+```
+
+### sandbox-agent (Docker en .101)
+
+```bash
+cd ~/Allaria-Hub/sandbox-agent && git pull && docker compose up -d --build
 ```
 
 ### Puertos
-| Servicio | Puerto |
-|----------|--------|
-| Frontend (nginx) | 3097 |
-| Backend (Express) | 3098 |
 
-El Dockerfile del back ejecuta `prisma db push` al iniciar (sincroniza schema automaticamente). El `.env` debe existir en el server antes del deploy.
+| Servicio | Puerto | Donde |
+|----------|--------|-------|
+| Frontend (nginx) | 3097 | CCE pod |
+| Backend (Express) | 3098 | CCE pod |
+| Sandbox Agent | 3100 | .101 |
+| sandbox-nginx | 3099 | .101 |
+| Proyectos de usuario | 4001-4100 | .101 |
 
-## Privacidad
+---
 
-- Cada usuario solo accede a sus propios datos (tokens, chats, conexiones)
-- Los tokens OAuth se guardan en la DB asociados al userId
-- El LLM nunca ve tokens - solo recibe los resultados de las tools
-- Los adjuntos se guardan como referencia `[adjunto nombre]` en DB, no el contenido
-- Las acciones destructivas requieren confirmacion explicita del usuario
+## Notas criticas para developers nuevos
 
-## Modelos disponibles
+- **No usar dockerode en el sandbox server**: todas las operaciones Docker en `docker.js` y `nginx.js` usan `spawn('docker', [...])` via CLI. dockerode cuelga indefinidamente en este entorno (problema con .git y el socket). No revertir bajo ningun concepto.
 
-| Selector | Model ID (LiteLLM) | Provider |
-|----------|-------------------|----------|
-| Gemini Rapido | `gemini/gemini-2.5-flash` | Google |
-| Gemini Pensar | `gemini/gemini-2.5-pro` | Google |
-| ChatGPT Rapido | `openai/gpt-4-turbo` | OpenAI |
-| ChatGPT Pensar | `openai/gpt-4o` | OpenAI |
-| Claude Sonnet 4.5 | `claude-sonnet-4-5` | Anthropic |
+- **Build asincrono**: POST /build responde inmediatamente con `status: 'building'`. El build corre en background. El backend hace polling al sandbox cada 6s hasta 20 intentos para saber el resultado.
 
-## Soporte de archivos adjuntos
+- **Reconciliation job**: corre al iniciar el backend y cada 5 minutos. Sincroniza el status de los proyectos contra el sandbox. Solo marca un proyecto como `stopped` si el sandbox devuelve 404 explicito, nunca en caso de timeout (para evitar falsos negativos).
 
-| Tipo | Gemini | ChatGPT | Claude |
-|------|--------|---------|--------|
-| Imagenes (png, jpg, webp, gif) | Si | Si | Si |
-| PDF | Si | Si | Si |
-| Audio (mp3, wav, ogg) | Si | Si | No |
-| Video | Si | No | No |
-| Texto/codigo | Si | Si | Si |
+- **git safe.directory**: el Dockerfile del sandbox-agent configura `git config --global safe.directory '*'` para evitar el error "dubious ownership" de git 2.35+.
 
-Al adjuntar un archivo, el chat cambia automaticamente a Gemini (mejor soporte multimodal).
+- **Networking sandbox**: `sandbox-nginx` y `sandbox-agent` necesitan `extra_hosts: host.docker.internal:host-gateway` para alcanzar puertos del host. Los `proxy_pass` usan `host.docker.internal:{port}`, no `localhost`.
 
-## Design System
+- **Auth token**: `SHA256(userId + GOOGLE_CLIENT_ID)` guardado en localStorage. El backend lo verifica en cada request.
 
-- **Colores**: Navy `#0B3D7A`, Gold `#B69A5B`
-- **Tipografia**: Playfair Display (headings), DM Sans (body), JetBrains Mono (code)
-- **Responsive**: Sidebar colapsable en mobile
+- **userSlug**: se deriva del email del usuario. `juan.perez@allaria.com.ar` -> `juan-perez`. Es parte de la URL de preview de los proyectos.
+
+---
+
+## Contactos e infraestructura
+
+| Recurso | Detalle |
+|---------|---------|
+| DNS y TIC | tic@allaria.com.ar |
+| Reviewer principal | Francisco Politi (mpoliti en GitLab) |
+| GitLab | https://gitlab.allaria.xyz / grupo allaria-sandbox (ID 54) |
+| CCE Cluster | Huawei Cloud la-south-2 / namespace allaria-hub |
+| ELB | 23.227.176.14 |
+| App server (CCE) | Nodos CCE, deployments back y front |
+| Sandbox server | 172.30.200.101 / usuario allaria |
+| DB PostgreSQL | 172.30.200.114:5432/allaria_hub |
+| LiteLLM | http://172.30.200.101:4000 |
