@@ -15,6 +15,7 @@ spec:
     spec:
       imagePullSecrets:
         - name: swr-pull-secret
+      serviceAccountName: hub-back
       containers:
         - name: back
           image: swr.la-south-2.myhuaweicloud.com/sandbox-allaria/allaria-hub-back:latest

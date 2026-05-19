@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hub-back
+  namespace: allaria-hub
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: session-manager
+  namespace: sandbox-sessions
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "get", "list", "delete", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hub-back-session-manager
+  namespace: sandbox-sessions
+subjects:
+  - kind: ServiceAccount
+    name: hub-back
+    namespace: allaria-hub
+roleRef:
+  kind: Role
+  name: session-manager
+  apiGroup: rbac.authorization.k8s.io
