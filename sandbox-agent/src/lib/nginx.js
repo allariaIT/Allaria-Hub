@@ -7,11 +7,17 @@ export function generateNginxConfig(projects) {
   const locations = projects.map(p =>
     `    location /${p.userSlug}/${p.name}/ {
         proxy_pass http://${PROXY_HOST}:${p.port}/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
     }`
   ).join('\n\n')
 
   return `server {
     listen 3099;
+    server_name proyectos-sandbox.allaria.xyz;
 
     location = / {
         return 200 'ok';
