@@ -19,6 +19,7 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       - red-docker
+      - gitlab_default
 
   nginx-proxy:
     image: nginx:alpine
@@ -37,4 +38,6 @@ services:
 
 networks:
   red-docker:
+    external: true
+  gitlab_default:
     external: true

@@ -27,7 +27,7 @@ export function gitCommitAndPush(projectDir, message, pushUrl) {
   try {
     if (pushUrl) {
       // Usar spawnSync para no exponer el token en el proceso
-      const pushResult = spawnSync('git', ['-c', 'http.sslVerify=false', 'push', pushUrl, 'HEAD:main'], {
+      const pushResult = spawnSync('git', ['-c', 'http.sslVerify=false', '-c', 'http.followRedirects=false', 'push', pushUrl, 'HEAD:main'], {
         cwd: projectDir,
         stdio: 'pipe',
         timeout: 30000,
