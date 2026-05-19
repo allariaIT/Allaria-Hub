@@ -6,6 +6,7 @@ import { proxyRouter } from './routes/proxy.js'
 import { authenticate } from './middleware/auth.js'
 import { connectorRouter } from './routes/connectors.js'
 import { projectsRouter } from './routes/projects.js'
+import { sessionsRouter } from './routes/sessions.js'
 import { prisma } from './lib/prisma.js'
 import { sandboxStatus } from './lib/sandbox-client.js'
 
@@ -50,6 +51,24 @@ app.get('/api/stats', authenticate, async (req, res) => {
 app.use('/api/chats', authenticate, chatRouter)
 app.use('/api/chat', authenticate, proxyRouter)
 app.use('/api/projects', authenticate, projectsRouter)
+
+// Sessions: CRUD de pods por proyecto (mergeParams pasa :id al router)
+app.use('/api/projects/:id/session', authenticate, sessionsRouter)
+
+// Internal: llamado por el pod al morir (sin auth, solo red interna del cluster)
+app.post('/api/internal/sessions/:sessionId/end', async (req, res) => {
+  try {
+    const { sessionId } = req.params
+    const { filesChanged = [], commitCount = 0, summary = '' } = req.body
+    await prisma.session.updateMany({
+      where: { id: sessionId },
+      data: { status: 'dead', filesChanged, commitCount, summary },
+    })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
 
 app.listen(PORT, () => {
   console.log(`[Allaria Hub API] Running on port ${PORT}`)
