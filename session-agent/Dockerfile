@@ -1,0 +1,15 @@
+FROM node:23-alpine
+
+RUN apk add --no-cache git openssh-client
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY src/ ./src/
+
+ENV PORT=3200
+ENV WORKSPACE_DIR=/workspace
+
+EXPOSE 3200
+CMD ["node", "src/index.js"]
