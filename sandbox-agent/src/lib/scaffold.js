@@ -113,4 +113,18 @@ body { font-family: system-ui, sans-serif; background: #0a0a0a; color: #fafafa; 
 h1 { font-size: 2.5rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 p { color: #888; }
 `)
+
+  fs.writeFileSync(path.join(projectDir, '.gitlab-ci.yml'),
+`include:
+  - project: 'devops/ci-cd-pipelines'
+    file: 'templates/docker-deployment.yml'
+    ref: latest
+
+variables:
+  IMAGE_NAME: "${userSlug}-${name}"
+  DEPLOY_HOST: "172.30.200.101"
+  DEPLOY_PATH: "/home/allaria/ci-deployments"
+  DEPLOY_APP_NAME: "${userSlug}-${name}"
+  SWR_ORGANIZATION: "sandbox-allaria"
+`)
 }

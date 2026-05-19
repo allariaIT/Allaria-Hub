@@ -39,9 +39,11 @@ export async function sandboxListFiles(userSlug, name) {
   return sandboxRequest(`/projects/${userSlug}/${name}/tree`)
 }
 
-export async function sandboxBuild(userSlug, name) {
-  // Build es async ahora — el endpoint responde inmediatamente
-  return sandboxRequest(`/projects/${userSlug}/${name}/build`, { method: 'POST' })
+export async function sandboxBuild(userSlug, name, repoUrl) {
+  return sandboxRequest(`/projects/${userSlug}/${name}/build`, {
+    method: 'POST',
+    body: JSON.stringify({ repoUrl }),
+  })
 }
 
 export async function sandboxPush(userSlug, name, message, repoUrl) {

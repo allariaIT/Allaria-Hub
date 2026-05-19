@@ -4,9 +4,9 @@ import { tasksListAll, tasksCreate, tasksComplete, tasksSearch } from './gtasks.
 import { driveListFiles, driveSearchFiles, driveGetFile } from './drive.js'
 import { SANDBOX_TOOL_DEFINITIONS, executeSandboxTool } from './sandbox-tools.js'
 
-// Tools de sandbox disponibles en el workspace (excluye sandbox_create_project)
+// Tools de sandbox disponibles en el workspace (excluye sandbox_create_project y sandbox_push — push está dentro de sandbox_build)
 const WORKSPACE_SANDBOX_TOOL_DEFINITIONS = SANDBOX_TOOL_DEFINITIONS.filter(
-  t => t.function.name !== 'sandbox_create_project'
+  t => !['sandbox_create_project', 'sandbox_push'].includes(t.function.name)
 )
 
 // Tools que requieren confirmación del usuario antes de ejecutarse
@@ -16,7 +16,6 @@ export const CONFIRMABLE_TOOLS = new Set([
   'tasks_create',
   'tasks_complete',
   'sandbox_create_project',
-  'sandbox_push',
 ])
 
 export const TOOL_DEFINITIONS = {

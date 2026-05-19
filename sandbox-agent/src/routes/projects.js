@@ -3,9 +3,26 @@ import { Router } from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
 import { generateScaffold } from '../lib/scaffold.js'
-import { buildImage, runContainer, stopContainer, getUsedPorts, findFreePort, releaseReservedPort, pruneOldImage, containerName, imageName, getContainerStatus, execInContainer } from '../lib/docker.js'
+import { stopContainer, getUsedPorts, findFreePort, releaseReservedPort, containerName, getContainerStatus, execInContainer } from '../lib/docker.js'
 import { writeAndReloadNginx } from '../lib/nginx.js'
 import { gitInit, gitCommitAndPush } from '../lib/git.js'
+
+function generateDockerCompose(userSlug, name, port) {
+  return `services:
+  app:
+    image: \${IMAGE_REF}
+    container_name: sandbox-${userSlug}-${name}
+    restart: unless-stopped
+    ports:
+      - "${port}:80"
+    networks:
+      - red-docker
+
+networks:
+  red-docker:
+    external: true
+`
+}
 
 const PROJECTS_DIR = process.env.PROJECTS_DIR || '/projects'
 const NGINX_CONFIG_PATH = process.env.NGINX_CONFIG_PATH || '/etc/nginx/conf.d/sandbox-projects.conf'
@@ -88,37 +105,27 @@ projectsRouter.post('/', async (req, res) => {
     const metaPath = path.join(projectDir, '.sandbox-meta.json')
     fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
 
-    // 5. Responder inmediatamente — el build corre en background
+    // 5. Escribir docker-compose.yml (necesita el puerto)
+    fs.writeFileSync(path.join(projectDir, 'docker-compose.yml'), generateDockerCompose(userSlug, name, port))
+    releaseReservedPort(port)
+
+    // 6. Responder inmediatamente — el CI se encarga del build y deploy
     res.json({ ok: true, port, status: 'building', previewUrl: `/${userSlug}/${name}/` })
 
-    // 6. Build en background con semáforo (limita builds concurrentes)
-    console.log(`[sandbox] ${userSlug}/${name} encolado (activos: ${activeBuilds}/${MAX_CONCURRENT_BUILDS})`)
+    // 7. Git push + nginx en background (ligero, no bloquea)
     ;(async () => {
-      await acquireBuildSlot()
-      console.log(`[sandbox] ${userSlug}/${name} build iniciado (activos: ${activeBuilds}/${MAX_CONCURRENT_BUILDS})`)
       try {
-        const imgTag = imageName(userSlug, name)
-        await buildImage(projectDir, imgTag)
-        await runContainer(containerName(userSlug, name), imgTag, port)
-        releaseReservedPort(port)
-        pruneOldImage() // limpia dangling images después de que el container viejo fue detenido
+        const result = gitCommitAndPush(projectDir, 'Initial scaffold', meta.repoUrl)
         await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
-        // Git push no-fatal: si falla no cancela el deploy
-        try { gitCommitAndPush(projectDir, 'Initial scaffold') } catch (gitErr) {
-          console.warn(`[sandbox] ${userSlug}/${name} git push ignorado:`, gitErr.message)
+        if (result.pushed) {
+          console.log(`[sandbox] ${userSlug}/${name} pushed OK → CI pipeline en curso`)
+        } else {
+          console.warn(`[sandbox] ${userSlug}/${name} git push falló:`, result.message)
+          try { fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: result.message }, null, 2)) } catch {}
         }
-
-        const check = await waitForContainer(port)
-        const finalStatus = check.ok ? 'running' : 'error'
-        fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: finalStatus }, null, 2))
-        console.log(`[sandbox] ${userSlug}/${name} build: ${finalStatus}`)
       } catch (err) {
-        releaseReservedPort(port)
-        console.error(`[sandbox] ${userSlug}/${name} build error:`, err.message)
-        // Usar try/catch para evitar crash si el directorio no existe
+        console.error(`[sandbox] ${userSlug}/${name} create background error:`, err.message)
         try { fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: err.message }, null, 2)) } catch {}
-      } finally {
-        releaseBuildSlot()
       }
     })()
   } catch (err) {
@@ -263,30 +270,26 @@ projectsRouter.post('/:user/:name/build', async (req, res) => {
     }
     const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'))
 
-    // Marcar como building y responder inmediatamente
+    // Push en background — CI se encarga del build y deploy
+    const pushUrl = req.body?.repoUrl || meta.repoUrl
     fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'building' }, null, 2))
     res.json({ ok: true, port: meta.port, status: 'building' })
 
-    // Build en background
     ;(async () => {
-      await acquireBuildSlot()
-      console.log(`[sandbox] ${user}/${name} rebuild iniciado`)
       try {
-        const imgTag = imageName(user, name)
-        await buildImage(projectDir, imgTag)
-        await runContainer(containerName(user, name), imgTag, meta.port)
-        pruneOldImage() // limpia dangling images después de que el container viejo fue detenido
-        await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
-
-        const check = await waitForContainer(meta.port)
-        const finalStatus = check.ok ? 'running' : 'error'
-        fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: finalStatus }, null, 2))
-        console.log(`[sandbox] ${user}/${name} rebuild: ${finalStatus}`)
+        const result = gitCommitAndPush(projectDir, 'Update from Allaria Hub', pushUrl)
+        if (result.pushed) {
+          console.log(`[sandbox] ${user}/${name} pushed OK → CI pipeline en curso`)
+        } else if (result.message === 'Nada para commitear') {
+          fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'running' }, null, 2))
+          console.log(`[sandbox] ${user}/${name} sin cambios, ya estaba running`)
+        } else {
+          console.error(`[sandbox] ${user}/${name} git push falló:`, result.message)
+          try { fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: result.message }, null, 2)) } catch {}
+        }
       } catch (err) {
-        console.error(`[sandbox] ${user}/${name} rebuild error:`, err.message)
+        console.error(`[sandbox] ${user}/${name} build error:`, err.message)
         try { fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'error', error: err.message }, null, 2)) } catch {}
-      } finally {
-        releaseBuildSlot()
       }
     })()
   } catch (err) {

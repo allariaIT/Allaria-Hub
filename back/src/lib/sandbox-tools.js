@@ -8,6 +8,39 @@ import {
 
 const PREVIEW_BASE = process.env.SANDBOX_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz'
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN
+const GITLAB_URL = process.env.GITLAB_URL || 'https://gitlab.allaria.xyz'
+
+async function pollGitlabPipeline(gitlabId, afterTime, maxAttempts = 40, delayMs = 15000) {
+  await new Promise(r => setTimeout(r, 8000))
+  let pipelineId = null
+
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const res = await fetch(
+        `${GITLAB_URL}/api/v4/projects/${gitlabId}/pipelines?per_page=5&order_by=id&sort=desc`,
+        { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN }, signal: AbortSignal.timeout(10000) }
+      )
+      const pipelines = await res.json()
+
+      if (!pipelineId) {
+        const recent = pipelines.find(p => new Date(p.created_at) >= afterTime)
+        if (recent) pipelineId = recent.id
+      }
+
+      if (pipelineId) {
+        const p = pipelines.find(p => p.id === pipelineId)
+        if (p) {
+          if (p.status === 'success') return { ok: true }
+          if (p.status === 'failed' || p.status === 'canceled') return { ok: false, message: `Pipeline CI ${p.status}` }
+        }
+      }
+    } catch {}
+
+    await new Promise(r => setTimeout(r, delayMs))
+  }
+
+  return { ok: false, message: 'Timeout esperando pipeline CI (10 min). Revisá GitLab.' }
+}
 
 function repoUrlWithAuth(url) {
   if (!url || !GITLAB_TOKEN) return url
@@ -86,7 +119,7 @@ export const SANDBOX_TOOL_DEFINITIONS = [
     type: 'function',
     function: {
       name: 'sandbox_build',
-      description: 'Reconstruye el container Docker y deploya los cambios. Llama esto despues de modificar archivos para que el usuario vea los cambios en la preview.',
+      description: 'Commitea y pushea los cambios al repo, dispara el pipeline CI que buildea y deploya la preview. Llamá esto después de modificar archivos. Espera hasta que el deploy esté completo.',
       parameters: {
         type: 'object',
         properties: {
@@ -194,35 +227,24 @@ export async function executeSandboxTool(name, args, userId) {
         data: { port, previewUrl, chatId, status: 'creating' },
       })
 
-      // 5. Polling para esperar que el build termine
-      for (let i = 0; i < 20; i++) {
-        await new Promise(r => setTimeout(r, 6000))
-        try {
-          const status = await sandboxStatus(userSlug, args.name)
-          if (status.status === 'running') {
-            await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
-            return {
-              message: `Proyecto "${args.title}" creado exitosamente.`,
-              previewUrl,
-              repoUrl: webUrl,
-              status: 'running',
-            }
-          }
-          if (status.status === 'error') {
-            await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
-            return {
-              message: `Proyecto "${args.title}" tuvo un error al buildear.`,
-              previewUrl,
-              status: 'error',
-            }
-          }
-        } catch {}
-      }
-
-      await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } }).catch(() => {})
-      return {
-        message: `Timeout esperando que "${args.title}" esté listo. El proyecto puede estar en error.`,
-        status: 'error',
+      // 5. Polling del pipeline CI en GitLab
+      const createStart = new Date()
+      const ciResult = await pollGitlabPipeline(gitlabId, createStart)
+      if (ciResult.ok) {
+        await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
+        return {
+          message: `Proyecto "${args.title}" creado y deployado exitosamente.`,
+          previewUrl,
+          repoUrl: webUrl,
+          status: 'running',
+        }
+      } else {
+        await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
+        return {
+          message: `Proyecto "${args.title}" creado pero el pipeline CI falló: ${ciResult.message}`,
+          previewUrl,
+          status: 'error',
+        }
       }
     }
 
@@ -249,28 +271,29 @@ export async function executeSandboxTool(name, args, userId) {
       const project = await prisma.project.findFirst({ where: { userId, name: args.projectName } })
       if (!project) throw new Error(`Proyecto "${args.projectName}" no encontrado`)
 
-      // Disparar build (responde inmediatamente ahora)
-      await sandboxBuild(userSlug, args.projectName)
+      const pushStart = new Date()
+      const pushResult = await sandboxBuild(userSlug, args.projectName, repoUrlWithAuth(project.repoUrl))
 
-      // Polling hasta que el sandbox confirme running o error
-      for (let i = 0; i < 20; i++) {
-        await new Promise(r => setTimeout(r, 6000))
-        try {
-          const status = await sandboxStatus(userSlug, args.projectName)
-          if (status.status === 'running') {
-            await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
-            return { ok: true, message: 'Build completado. Preview actualizada.', previewUrl: project.previewUrl }
-          }
-          if (status.status === 'error') {
-            await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
-            return { ok: false, message: 'El build falló. Revisá los archivos del proyecto.' }
-          }
-        } catch {}
+      // Sin cambios → ya estaba running
+      if (pushResult.status === 'running') {
+        return { ok: true, message: 'Sin cambios para deployar. La preview ya está actualizada.', previewUrl: project.previewUrl }
       }
 
-      // Timeout después de 20 × 6s = 2 minutos
-      await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
-      return { ok: false, message: 'Timeout esperando el build (2 minutos). El proyecto puede estar en error.' }
+      // Error en el push
+      if (!pushResult.ok) {
+        await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
+        return { ok: false, message: pushResult.error || 'Error al pushear el código.' }
+      }
+
+      // Polling del pipeline CI en GitLab
+      const ciResult = await pollGitlabPipeline(project.gitlabId, pushStart)
+      if (ciResult.ok) {
+        await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
+        return { ok: true, message: 'Deploy completado. Preview actualizada.', previewUrl: project.previewUrl }
+      } else {
+        await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
+        return { ok: false, message: ciResult.message || 'El pipeline CI falló.' }
+      }
     }
 
     case 'sandbox_push': {

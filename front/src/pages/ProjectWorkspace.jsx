@@ -18,11 +18,10 @@ Nunca digas "listo", "hecho", "cambié X" ni des por completada ninguna tarea si
 FLUJO OBLIGATORIO para cualquier modificación (todos los pasos, sin omitir ninguno):
 1. sandbox_read_file — Leé el archivo actual para no perder código existente
 2. sandbox_write_file — Escribí el archivo completo con los cambios aplicados
-3. sandbox_build — Rebuildeá y esperá confirmación de que el container quedó UP (running)
-4. sandbox_push — Commiteá y pusheá los cambios al repo con un mensaje descriptivo
-5. Recién después de completar los 4 pasos anteriores, confirmá al usuario: "✅ Listo, probalo: [previewUrl]"
+3. sandbox_build — Pushea el código, dispara el pipeline CI y espera que el deploy termine. Cuando retorna ok=true, la preview ya está actualizada.
+4. Recién después de completar los 3 pasos anteriores, confirmá al usuario: "✅ Listo, probalo: [previewUrl]"
 
-Si sandbox_build retorna error o no queda running, reportá el error al usuario. NO digas "listo".
+Si sandbox_build retorna error, reportá el error al usuario. NO digas "listo".
 Si el usuario pregunta algo sin pedir modificaciones, respondé directamente sin ejecutar el flujo.
 
 REGLAS ADICIONALES:
@@ -30,7 +29,7 @@ REGLAS ADICIONALES:
 - Cada vez que modifiques archivos, actualizá también CHANGELOG.md con fecha y descripción del cambio.
 - NO creés proyectos nuevos. Solo trabajás dentro del proyecto activo indicado abajo.
 
-Tools disponibles: sandbox_write_file, sandbox_read_file, sandbox_list_files, sandbox_build, sandbox_push, sandbox_status.`
+Tools disponibles: sandbox_write_file, sandbox_read_file, sandbox_list_files, sandbox_build, sandbox_status.`
 
 const DEFAULT_MODEL = 'claude-sonnet-4-5'
 
@@ -40,8 +39,7 @@ const TOOL_PROGRESS = {
   sandbox_write_file:    (a) => `Escribiendo ${a.filePath || 'archivo'}`,
   sandbox_read_file:     (a) => `Leyendo ${a.filePath || 'archivo'}`,
   sandbox_list_files:    ()  => 'Listando archivos',
-  sandbox_build:         ()  => 'Buildeando proyecto...',
-  sandbox_push:          (a) => `Push: "${a.message || ''}"`,
+  sandbox_build:         ()  => 'Pusheando y esperando pipeline CI...',
   sandbox_status:        ()  => 'Revisando estado',
   sandbox_create_project:(a) => `Creando proyecto "${a.name || ''}"`,
 }
