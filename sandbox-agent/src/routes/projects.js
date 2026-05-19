@@ -160,13 +160,14 @@ projectsRouter.get('/:user/:name', async (req, res) => {
     return res.status(404).json({ error: 'Proyecto no encontrado' })
   }
   const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'))
-  // Si está buildeando, no pisar con el status live del container
-  // (el container viejo sigue corriendo durante el build y reportaría 'running' prematuramente)
-  if (meta.status === 'building') {
-    return res.json(meta)
+  const liveStatus = await getContainerStatus(containerName(user, name))
+  // Si el container ya está corriendo (CI terminó), actualizar meta
+  if (meta.status === 'building' && liveStatus === 'running') {
+    const updated = { ...meta, status: 'running' }
+    try { fs.writeFileSync(metaPath, JSON.stringify(updated, null, 2)) } catch {}
+    return res.json(updated)
   }
-  const status = await getContainerStatus(containerName(user, name))
-  res.json({ ...meta, status })
+  res.json({ ...meta, status: liveStatus })
 })
 
 // DELETE /projects/:user/:name - Delete project
