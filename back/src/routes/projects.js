@@ -9,8 +9,8 @@ const GITLAB_TOKEN = process.env.GITLAB_TOKEN
 const GITLAB_URL = process.env.GITLAB_URL || 'https://gitlab.allaria.xyz'
 function withAuth(url) {
   if (!url || !GITLAB_TOKEN) return url
-  // Usa container name "gitlab" via gitlab_default network — evita redirect HTTP→HTTPS
-  return url.replace(/https:\/\/gitlab\.allaria\.xyz/, `http://oauth2:${GITLAB_TOKEN}@gitlab`)
+  const cloneUrl = url.endsWith('.git') ? url : url + '.git'
+  return cloneUrl.replace(/https:\/\/gitlab\.allaria\.xyz/, `http://oauth2:${GITLAB_TOKEN}@gitlab`)
 }
 
 function userSlugFromEmail(email) {
