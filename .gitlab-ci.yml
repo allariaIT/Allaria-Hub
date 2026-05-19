@@ -58,7 +58,7 @@ deploy-back:
     - kubectl apply -f k8s/namespace.yaml
     - kubectl apply -f k8s/back-deployment.yaml
     - kubectl set image deployment/back back="$IMAGE_BACK:$CI_COMMIT_SHORT_SHA" -n $NAMESPACE
-    - kubectl rollout status deployment/back -n $NAMESPACE --timeout=120s
+    - kubectl rollout status deployment/back -n $NAMESPACE --timeout=300s
 
 deploy-front:
   extends: .deploy
@@ -70,4 +70,4 @@ deploy-front:
     - kubectl apply -f k8s/front-deployment.yaml
     - kubectl apply -f k8s/ingress.yaml
     - kubectl set image deployment/front front="$IMAGE_FRONT:$CI_COMMIT_SHORT_SHA" -n $NAMESPACE
-    - kubectl rollout status deployment/front -n $NAMESPACE --timeout=120s
+    - kubectl rollout status deployment/front -n $NAMESPACE --timeout=300s
