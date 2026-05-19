@@ -28,8 +28,8 @@ projectsRouter.post('/', async (req, res) => {
     }
 
     // Validar slug
-    if (!/^[a-z0-9-]+$/.test(name)) {
-      return res.status(400).json({ error: 'name solo puede tener letras minusculas, numeros y guiones' })
+    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(name)) {
+      return res.status(400).json({ error: 'name solo puede tener letras minusculas, numeros y guiones, y no puede empezar ni terminar con guion' })
     }
 
     const userSlug = userSlugFromEmail(req.user.email)
