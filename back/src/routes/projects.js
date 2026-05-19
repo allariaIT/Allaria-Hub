@@ -5,6 +5,12 @@ import { createGitlabRepo, deleteGitlabRepo } from '../lib/gitlab.js'
 
 export const projectsRouter = Router()
 
+const GITLAB_TOKEN = process.env.GITLAB_TOKEN
+function withAuth(url) {
+  if (!url || !GITLAB_TOKEN) return url
+  return url.replace('https://', `https://oauth2:${GITLAB_TOKEN}@`)
+}
+
 function userSlugFromEmail(email) {
   const local = email.split('@')[0]
   return local.replace(/\./g, '-').toLowerCase()
@@ -37,7 +43,8 @@ projectsRouter.post('/', async (req, res) => {
       repoUrl = gitlab.webUrl
       gitHttpUrl = gitlab.repoUrl
     } catch (err) {
-      console.warn('GitLab error (continuando sin repo):', err.message)
+      console.error('GitLab error al crear repo:', err.message)
+      return res.status(502).json({ error: `Error al crear repo en GitLab: ${err.message}` })
     }
 
     // 2. Crear en DB
@@ -56,7 +63,7 @@ projectsRouter.post('/', async (req, res) => {
     // 4. Llamar al sandbox agent (ahora devuelve inmediatamente con status: building)
     let port = null
     try {
-      const result = await sandboxCreateProject(userSlug, name, title, gitHttpUrl)
+      const result = await sandboxCreateProject(userSlug, name, title, withAuth(gitHttpUrl))
       port = result.port
     } catch (err) {
       console.error('Sandbox agent error:', err.message)
