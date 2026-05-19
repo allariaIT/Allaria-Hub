@@ -150,6 +150,7 @@ export default function Projects() {
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9\s-]/g, '')
         .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
         .replace(/^-+|-+$/g, '')
         .slice(0, 40),
     }))
@@ -367,7 +368,7 @@ export default function Projects() {
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   required
-                  pattern="[a-z0-9][a-z0-9-]*[a-z0-9]|[a-z0-9]"
+                  pattern="[a-z0-9][-a-z0-9]*[a-z0-9]|[a-z0-9]"
                 />
                 <span className="modal-hint">Solo letras minúsculas, números y guiones</span>
               </label>
