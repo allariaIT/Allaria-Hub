@@ -12,4 +12,5 @@ ENV PORT=3200
 ENV WORKSPACE_DIR=/workspace
 
 EXPOSE 3200
+USER node
 CMD ["node", "src/index.js"]

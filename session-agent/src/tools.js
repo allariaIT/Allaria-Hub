@@ -9,7 +9,8 @@ const BASH_ALLOWLIST = new Set(['npm', 'npx', 'node', 'cat', 'ls', 'mkdir', 'cp'
 
 function safePath(filePath) {
   const resolved = path.resolve(WORKSPACE, filePath)
-  if (!resolved.startsWith(WORKSPACE)) throw new Error(`Path inválido: ${filePath}`)
+  if (!resolved.startsWith(WORKSPACE + path.sep) && resolved !== WORKSPACE)
+    throw new Error(`Path inválido: ${filePath}`)
   return resolved
 }
 
@@ -117,10 +118,14 @@ export async function executeTool(name, input) {
     }
 
     case 'git_push': {
-      const result = gitCommitAndPush(WORKSPACE, input.message)
-      if (!result.pushed) return { ok: false, message: result.message }
-      const files = getChangedFiles(WORKSPACE)
-      return { ok: true, pushed: true, commit: result.commit, filesChanged: files }
+      try {
+        const result = gitCommitAndPush(WORKSPACE, input.message)
+        if (!result.pushed) return { ok: false, message: result.message }
+        const files = getChangedFiles(WORKSPACE)
+        return { ok: true, pushed: true, commit: result.commit, filesChanged: files }
+      } catch (err) {
+        return { ok: false, error: err.message }
+      }
     }
 
     default:

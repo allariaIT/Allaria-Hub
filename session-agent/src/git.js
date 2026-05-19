@@ -14,7 +14,7 @@ export function gitClone(repoUrl, targetDir) {
     return
   }
   run('git', ['clone', repoUrl, targetDir], '/')
-  run('git', ['config', 'safe.directory', '*'], targetDir)
+  run('git', ['config', '--global', 'safe.directory', '*'], targetDir)
 }
 
 export function gitCommitAndPush(dir, message) {
