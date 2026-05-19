@@ -10,7 +10,7 @@ const PREVIEW_BASE = process.env.SANDBOX_PREVIEW_URL || 'https://proyectos-sandb
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN
 const GITLAB_URL = process.env.GITLAB_URL || 'https://gitlab.allaria.xyz'
 
-async function pollGitlabPipeline(gitlabId, afterTime, maxAttempts = 40, delayMs = 15000) {
+export async function pollGitlabPipeline(gitlabId, afterTime, maxAttempts = 40, delayMs = 15000) {
   await new Promise(r => setTimeout(r, 8000))
   let pipelineId = null
 

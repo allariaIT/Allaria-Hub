@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { sandboxDelete, sandboxStop, sandboxStatus, sandboxCreateProject } from '../lib/sandbox-client.js'
 import { createGitlabRepo, deleteGitlabRepo } from '../lib/gitlab.js'
+import { pollGitlabPipeline } from '../lib/sandbox-tools.js'
 
 export const projectsRouter = Router()
 
@@ -82,26 +83,17 @@ projectsRouter.post('/', async (req, res) => {
     // 6. Responder al frontend inmediatamente
     res.json(updated)
 
-    // 7. Polling en background: esperar a que el sandbox confirme que está running
+    // 7. Polling del pipeline CI en GitLab (hasta 10 min)
+    const createStart = new Date()
     ;(async () => {
-      for (let i = 0; i < 20; i++) {
-        await new Promise(r => setTimeout(r, 6000))
-        try {
-          const status = await sandboxStatus(userSlug, name)
-          if (status.status === 'running') {
-            await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
-            console.log(`[projects] ${name} build completado → running`)
-            return
-          }
-          if (status.status === 'error') {
-            await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
-            return
-          }
-        } catch {}
+      const ciResult = await pollGitlabPipeline(updated.gitlabId, createStart)
+      if (ciResult.ok) {
+        await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
+        console.log(`[projects] ${name} build completado → running`)
+      } else {
+        await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } }).catch(() => {})
+        console.error(`[projects] ${name} build timeout`)
       }
-      // Timeout: marcar como error
-      await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } }).catch(() => {})
-      console.error(`[projects] ${name} build timeout`)
     })()
   } catch (err) {
     console.error('Create project error:', err)
