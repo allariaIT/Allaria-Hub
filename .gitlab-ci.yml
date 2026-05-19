@@ -38,6 +38,15 @@ build-front:
     - docker push "$IMAGE_FRONT:$CI_COMMIT_SHORT_SHA"
     - docker push "$IMAGE_FRONT:latest"
 
+build-session-agent:
+  extends: .build
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - docker build --platform linux/amd64 -t "$SWR_REGISTRY/$SWR_ORGANIZATION/session-agent:$CI_COMMIT_SHORT_SHA" -t "$SWR_REGISTRY/$SWR_ORGANIZATION/session-agent:latest" ./session-agent
+    - docker push "$SWR_REGISTRY/$SWR_ORGANIZATION/session-agent:$CI_COMMIT_SHORT_SHA"
+    - docker push "$SWR_REGISTRY/$SWR_ORGANIZATION/session-agent:latest"
+
 # ── DEPLOY ─────────────────────────────────────────────────────────────────────
 
 .deploy:
@@ -68,6 +77,5 @@ deploy-front:
   script:
     - kubectl apply -f k8s/namespace.yaml
     - kubectl apply -f k8s/front-deployment.yaml
-    - kubectl apply -f k8s/ingress.yaml
     - kubectl set image deployment/front front="$IMAGE_FRONT:$CI_COMMIT_SHORT_SHA" -n $NAMESPACE
     - kubectl rollout status deployment/front -n $NAMESPACE --timeout=300s
