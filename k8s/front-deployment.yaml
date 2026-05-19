@@ -17,7 +17,7 @@ spec:
         - name: swr-pull-secret
       containers:
         - name: front
-          image: swr.la-south-2.myhuaweicloud.com/allaria-sandbox/allaria-hub-front:latest
+          image: swr.la-south-2.myhuaweicloud.com/sandbox-allaria/allaria-hub-front:latest
           ports:
             - containerPort: 3097
           readinessProbe:

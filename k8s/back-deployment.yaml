@@ -17,7 +17,7 @@ spec:
         - name: swr-pull-secret
       containers:
         - name: back
-          image: swr.la-south-2.myhuaweicloud.com/allaria-sandbox/allaria-hub-back:latest
+          image: swr.la-south-2.myhuaweicloud.com/sandbox-allaria/allaria-hub-back:latest
           ports:
             - containerPort: 3098
           envFrom:
@@ -37,8 +37,8 @@ spec:
             periodSeconds: 20
           resources:
             requests:
-              cpu: "100m"
-              memory: "256Mi"
+              cpu: "50m"
+              memory: "128Mi"
             limits:
               cpu: "500m"
               memory: "512Mi"
