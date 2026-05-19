@@ -36,6 +36,11 @@ export async function* runAgent(userMessage, history, systemPrompt) {
 
     if (response.stop_reason === 'end_turn') break
 
+    if (response.stop_reason === 'max_tokens') {
+      yield { type: 'error', message: 'Respuesta truncada por límite de tokens. Podés pedirme que continúe.' }
+      break
+    }
+
     if (response.stop_reason === 'tool_use') {
       messages.push({ role: 'assistant', content: response.content })
 

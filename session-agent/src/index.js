@@ -39,6 +39,8 @@ REGLAS ADICIONALES:
 // Estado de inactividad
 let lastActivity = Date.now()
 const IDLE_TIMEOUT_MS = 60 * 60 * 1000 // 60 min
+let shuttingDown = false
+let server
 
 // GET /health
 app.get('/health', (req, res) => {
@@ -92,6 +94,10 @@ app.post('/chat', async (req, res) => {
 
 // Shutdown graceful
 async function shutdown(signal) {
+  if (shuttingDown) return
+  shuttingDown = true
+  clearInterval(idleTimer)
+  if (server) server.close()
   console.log(`[session-agent] ${signal} recibido — iniciando shutdown`)
   try {
     const result = gitCommitAndPush(WORKSPACE, 'session end: auto-push')
@@ -118,7 +124,7 @@ process.on('SIGTERM', () => shutdown('SIGTERM'))
 process.on('SIGINT', () => shutdown('SIGINT'))
 
 // Idle watcher: verifica inactividad cada 5 min
-setInterval(() => {
+const idleTimer = setInterval(() => {
   if (Date.now() - lastActivity > IDLE_TIMEOUT_MS) {
     console.log('[session-agent] Inactividad detectada — iniciando shutdown')
     shutdown('IDLE')
@@ -138,7 +144,7 @@ async function start() {
     }
   }
 
-  app.listen(PORT, () => {
+  server = app.listen(PORT, () => {
     console.log(`[session-agent] Running on port ${PORT} — session ${SESSION_ID}`)
   })
 }
