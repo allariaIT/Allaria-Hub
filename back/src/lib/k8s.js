@@ -90,7 +90,7 @@ export async function deleteSessionPod(podName) {
     await coreV1.deleteNamespacedPod(podName, NAMESPACE)
   } catch (err) {
     // 404 = ya no existe, ignorar
-    if (!err.body?.code === 404) throw err
+    if (err.body?.code !== 404) throw err
   }
 }
 

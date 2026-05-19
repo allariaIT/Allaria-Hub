@@ -10,7 +10,7 @@ const GITLAB_URL = process.env.GITLAB_URL || 'https://gitlab.allaria.xyz'
 function repoUrlWithAuth(url) {
   if (!url || !GITLAB_TOKEN) return url
   const base = url.endsWith('.git') ? url : url + '.git'
-  return base.replace(/https:\/\/gitlab\.allaria\.xyz/, `http://oauth2:${GITLAB_TOKEN}@gitlab.allaria.xyz`)
+  return base.replace(/https:\/\/gitlab\.allaria\.xyz/, `https://oauth2:${GITLAB_TOKEN}@gitlab.allaria.xyz`)
 }
 
 async function findActiveSession(userId, projectId) {
@@ -44,9 +44,16 @@ sessionsRouter.post('/', async (req, res) => {
       process.env.LITELLM_KEY,
     )
 
-    session = await prisma.session.create({
-      data: { id: sessionId, userId, projectId, podName, status: 'starting' },
-    })
+    let session
+    try {
+      session = await prisma.session.create({
+        data: { id: sessionId, userId, projectId, podName, status: 'starting' },
+      })
+    } catch (dbErr) {
+      // Rollback: delete the pod to avoid resource leak
+      deleteSessionPod(podName).catch(() => {})
+      throw dbErr
+    }
 
     res.json({ sessionId: session.id, status: 'starting' })
   } catch (err) {
