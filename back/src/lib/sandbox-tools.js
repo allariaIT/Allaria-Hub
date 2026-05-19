@@ -44,7 +44,8 @@ async function pollGitlabPipeline(gitlabId, afterTime, maxAttempts = 40, delayMs
 
 function repoUrlWithAuth(url) {
   if (!url || !GITLAB_TOKEN) return url
-  return url.replace('https://', `https://oauth2:${GITLAB_TOKEN}@`)
+  // Usa URL interna HTTP para evitar SSL desde el sandbox-agent
+  return url.replace(/https:\/\/gitlab\.allaria\.xyz/, `http://oauth2:${GITLAB_TOKEN}@172.30.200.101`)
 }
 
 function userSlugFromEmail(email) {

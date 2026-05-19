@@ -6,9 +6,12 @@ import { createGitlabRepo, deleteGitlabRepo } from '../lib/gitlab.js'
 export const projectsRouter = Router()
 
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN
+const GITLAB_URL = process.env.GITLAB_URL || 'https://gitlab.allaria.xyz'
 function withAuth(url) {
   if (!url || !GITLAB_TOKEN) return url
-  return url.replace('https://', `https://oauth2:${GITLAB_TOKEN}@`)
+  // Usa la URL interna HTTP para evitar SSL desde el sandbox-agent
+  const internalBase = GITLAB_URL.replace(/\/$/, '')
+  return url.replace(/https:\/\/gitlab\.allaria\.xyz/, `http://oauth2:${GITLAB_TOKEN}@172.30.200.101`)
 }
 
 function userSlugFromEmail(email) {

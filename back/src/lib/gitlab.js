@@ -13,7 +13,7 @@ async function gitlabApi(path, options = {}) {
     },
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.message || JSON.stringify(data))
+  if (!res.ok) throw new Error(typeof data.message === 'string' ? data.message : JSON.stringify(data))
   return data
 }
 
