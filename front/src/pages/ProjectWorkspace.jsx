@@ -430,7 +430,10 @@ export default function ProjectWorkspace() {
     </div>
   )
 
-  if (project?.status === 'creating') return (
+  // Pantalla "El proyecto se está creando" SOLO si el chat está vacío.
+  // Si ya hay mensajes, es un re-deploy en curso — el usuario sigue en el
+  // workspace y se muestra un banner inline (más abajo).
+  if (project?.status === 'creating' && messages.length === 0) return (
     <div className="pw-error">
       <Loader2 size={32} className="pw-spin" style={{ color: '#eab308' }} />
       <p style={{ marginTop: '1rem', fontWeight: 600 }}>El proyecto se está creando...</p>

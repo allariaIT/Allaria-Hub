@@ -410,15 +410,21 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
           send(data)
           if (data.type === 'done') assistantContent = data.content
           if (data.type === 'pushed') {
-            // Update project status and poll CI
+            // No cambiamos el status del proyecto a 'creating' acá: es un re-deploy,
+            // el container viejo sigue corriendo mientras el CI buildea el nuevo.
+            // Cambiar a 'creating' sacaría al usuario del workspace y le mostraría
+            // la pantalla de "proyecto nuevo" perdiendo el contexto del chat.
+            // Solo trackeamos el pipeline para marcar 'error' si falla.
             const project = await prisma.project.findFirst({ where: { id: projectId } })
             if (project?.gitlabId) {
-              await prisma.project.update({ where: { id: project.id }, data: { status: 'creating' } })
               pollGitlabPipeline(project.gitlabId, new Date()).then(async (result) => {
-                await prisma.project.update({
-                  where: { id: project.id },
-                  data: { status: result.ok ? 'running' : 'error' },
-                })
+                if (!result.ok) {
+                  await prisma.project.update({
+                    where: { id: project.id },
+                    data: { status: 'error' },
+                  })
+                }
+                // Si ok: dejamos status como está (típicamente 'running')
               }).catch(() => {})
             }
           }
