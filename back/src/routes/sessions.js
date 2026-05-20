@@ -57,6 +57,26 @@ sessionsRouter.post('/', async (req, res) => {
       throw dbErr
     }
 
+    // Esperar al pod ready en background y actualizar la DB.
+    // Sin esto, el status queda 'starting' hasta que el usuario mande un
+    // mensaje (que dispara waitForPodReady en handleWorkspaceStream), y el
+    // banner "Iniciando workspace" del front no desaparece.
+    ;(async () => {
+      try {
+        const podIP = await waitForPodReady(podName, 120_000)
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: { podIP, status: 'ready', lastActivity: new Date() },
+        })
+      } catch (err) {
+        console.error(`[sessions] waitForPodReady falló para ${sessionId}: ${err.message}`)
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: { status: 'dead' },
+        }).catch(() => {})
+      }
+    })()
+
     res.json({ sessionId: session.id, status: 'starting' })
   } catch (err) {
     console.error('[sessions] POST error:', err.message)
