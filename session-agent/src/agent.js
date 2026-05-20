@@ -76,7 +76,13 @@ export async function* runAgent(userMessage, history, systemPrompt) {
           yield { type: 'pushed', commit: result.commit, filesChanged: result.filesChanged }
         }
 
-        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) })
+        // Truncar resultados grandes para no explotar el contexto (ej: archivos grandes, npm output)
+        const MAX_RESULT = 12_000
+        let resultContent = JSON.stringify(result)
+        if (resultContent.length > MAX_RESULT) {
+          resultContent = resultContent.slice(0, MAX_RESULT) + '…[truncado por tamaño]'
+        }
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: resultContent })
       }
 
       rounds++

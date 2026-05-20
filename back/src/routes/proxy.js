@@ -364,7 +364,7 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: lastUserMsg.content,
-        history: messages.slice(0, -1),
+        history: messages.slice(0, -1).slice(-6), // últimos 6 mensajes para no explotar el contexto
       }),
       signal: AbortSignal.timeout(900_000), // 15 min — el agente puede tardar en tareas complejas
     })
