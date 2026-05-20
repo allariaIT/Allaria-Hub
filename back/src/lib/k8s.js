@@ -41,7 +41,7 @@ export async function createSessionPod(sessionId, repoUrl, litellmUrl, litellmKe
             { name: 'BACK_URL', value: backUrl || 'http://back.allaria-hub.svc.cluster.local:3098' },
           ],
           resources: {
-            requests: { cpu: '100m', memory: '256Mi' },
+            requests: { cpu: '10m', memory: '64Mi' },
             limits: { cpu: '500m', memory: '512Mi' },
           },
           readinessProbe: {
