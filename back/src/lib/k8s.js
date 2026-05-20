@@ -65,12 +65,21 @@ export async function waitForPodReady(podName, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs
 
   while (Date.now() < deadline) {
-    const { body } = await coreV1.readNamespacedPod(podName, NAMESPACE)
+    let body
+    try {
+      const res = await coreV1.readNamespacedPod(podName, NAMESPACE)
+      body = res.body
+    } catch (err) {
+      if (err.body?.code === 404 || err.statusCode === 404) {
+        throw new Error(`Pod ${podName} fue eliminado`)
+      }
+      throw err
+    }
+
     const phase = body.status?.phase
     const podIP = body.status?.podIP
 
     if (phase === 'Running' && podIP) {
-      // Esperar que el readiness probe pase
       const conditions = body.status?.conditions || []
       const ready = conditions.find(c => c.type === 'Ready')
       if (ready?.status === 'True') return podIP
