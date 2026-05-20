@@ -81,6 +81,15 @@ export default function ProjectWorkspace() {
   const messagesEndRef = useRef(null)
   const inputRef       = useRef(null)
   const activeStreamRef = useRef(null) // AbortController de la conexión actual
+  // Ref paralelo al state `activity` para poder leerlo sincrono en handlers SSE
+  // (el state de React puede estar stale dentro de updaters async)
+  const activityRef = useRef(emptyActivity())
+
+  const setActivitySync = useCallback((next) => {
+    const value = typeof next === 'function' ? next(activityRef.current) : next
+    activityRef.current = value
+    setActivity(value)
+  }, [])
 
   // ─────────────────────────────────────────────────────────────────────────
   // CARGA INICIAL
@@ -168,7 +177,7 @@ export default function ProjectWorkspace() {
       return
     }
     if (event.type === 'text') {
-      setActivity(prev => {
+      setActivitySync(prev => {
         const events = [...prev.events]
         const last = events[events.length - 1]
         if (last && last.type === 'text') {
@@ -186,7 +195,7 @@ export default function ProjectWorkspace() {
     }
     if (event.type === 'tool_start') {
       const label = TOOL_PROGRESS[event.name]?.(event.args || {}) ?? event.name
-      setActivity(prev => ({
+      setActivitySync(prev => ({
         status: 'running',
         events: [...prev.events, {
           id: `tool-${Date.now()}-${Math.random()}`,
@@ -199,7 +208,7 @@ export default function ProjectWorkspace() {
       return
     }
     if (event.type === 'tool_done') {
-      setActivity(prev => {
+      setActivitySync(prev => {
         const events = [...prev.events]
         for (let i = events.length - 1; i >= 0; i--) {
           if (events[i].type === 'tool' && events[i].status === 'running') {
@@ -212,7 +221,7 @@ export default function ProjectWorkspace() {
       return
     }
     if (event.type === 'pushed') {
-      setActivity(prev => ({
+      setActivitySync(prev => ({
         ...prev,
         events: [...prev.events, {
           id: `push-${Date.now()}`,
@@ -223,30 +232,24 @@ export default function ProjectWorkspace() {
       return
     }
     if (event.type === 'done') {
-      // Resumen final = último bloque de texto que escribió el bot.
-      // event.content viene con la concatenación completa (ya la vio el usuario en vivo),
-      // así que preferimos el último bloque como "veredicto".
-      let summary = ''
-      setActivity(prev => {
-        const textBlocks = prev.events.filter(e => e.type === 'text')
-        if (textBlocks.length > 0) {
-          summary = textBlocks[textBlocks.length - 1].content || ''
-        }
-        if (!summary.trim()) summary = event.content || ''
-        return emptyActivity()
-      })
-      queueMicrotask(() => {
-        if (summary.trim()) {
-          setMessages(prev => [...prev, { role: 'assistant', content: summary }])
-        }
-      })
+      // Leer events sincrono del ref (state puede estar stale en handlers async).
+      // Veredicto = último bloque de texto. Si está vacío, fallback al fullText
+      // del back. Si todo está vacío, mensaje placeholder para que el usuario
+      // sepa que el bot respondió.
+      const currentEvents = activityRef.current.events
+      const textBlocks = currentEvents.filter(e => e.type === 'text')
+      let summary = textBlocks.length > 0 ? (textBlocks[textBlocks.length - 1].content || '') : ''
+      if (!summary.trim()) summary = event.content || ''
+      if (!summary.trim()) summary = '(Sin contenido en la respuesta)'
+      setMessages(prev => [...prev, { role: 'assistant', content: summary }])
+      setActivitySync(emptyActivity())
       return
     }
     if (event.type === 'error') {
       setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${event.message}` }])
-      setActivity(emptyActivity())
+      setActivitySync(emptyActivity())
     }
-  }, [])
+  }, [setActivitySync])
 
   // Lee SSE de un Response y dispara handleStreamEvent por cada evento
   const consumeSSE = useCallback(async (response, { onEnd } = {}) => {
@@ -373,7 +376,7 @@ export default function ProjectWorkspace() {
     if (!text || !chat) return
 
     setSending(true)
-    setActivity(emptyActivity())
+    setActivitySync(emptyActivity())
 
     const userMsg = { role: 'user', content: text }
     const newMessages = [...messages, userMsg]
@@ -397,7 +400,7 @@ export default function ProjectWorkspace() {
       await consumeSSE(response)
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }])
-      setActivity(emptyActivity())
+      setActivitySync(emptyActivity())
     } finally {
       setSending(false)
     }
