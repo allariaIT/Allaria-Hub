@@ -10,6 +10,7 @@ async function callLiteLLM(messages) {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${process.env.LITELLM_KEY}`,
+      'Connection': 'close',
     },
     body: JSON.stringify({
       model: MODEL,
@@ -20,9 +21,12 @@ async function callLiteLLM(messages) {
   })
   if (!res.ok) {
     const err = await res.text()
+    console.error(`[agent] LiteLLM error ${res.status}:`, err.slice(0, 200))
     throw new Error(`LiteLLM ${res.status}: ${err}`)
   }
-  return res.json()
+  const data = await res.json()
+  console.log(`[agent] LiteLLM ok — finish_reason: ${data.choices?.[0]?.finish_reason}, tools: ${data.choices?.[0]?.message?.tool_calls?.length ?? 0}`)
+  return data
 }
 
 export async function* runAgent(userMessage, history, systemPrompt) {
