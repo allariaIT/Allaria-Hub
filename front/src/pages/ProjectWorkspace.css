@@ -571,6 +571,164 @@
   border-color: rgba(239, 68, 68, 0.3);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Workspace starting banner (cuando el pod está levantándose)
+   ───────────────────────────────────────────────────────────────────────── */
+.pw-workspace-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 12px 1.5rem 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(234, 179, 8, 0.10), rgba(234, 179, 8, 0.04));
+  border: 1px solid rgba(234, 179, 8, 0.25);
+  color: #b88e07;
+  flex-shrink: 0;
+}
+
+.pw-workspace-banner .pw-spin {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.pw-workspace-banner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pw-workspace-banner-content strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #a37b04;
+}
+
+.pw-workspace-banner-content span {
+  color: var(--text-secondary);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Activity card — texto del bot + tool chips en vivo
+   ───────────────────────────────────────────────────────────────────────── */
+.pw-activity {
+  margin-left: 38px;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-left: 3px solid var(--allaria-navy);
+  border-radius: 10px;
+  position: relative;
+}
+
+.pw-activity-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  padding-bottom: 4px;
+  border-bottom: 1px dashed var(--border-light);
+}
+
+.pw-activity-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--allaria-navy);
+  box-shadow: 0 0 0 0 rgba(28, 56, 105, 0.5);
+  animation: pw-pulse 1.4s ease-out infinite;
+}
+
+@keyframes pw-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(28, 56, 105, 0.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(28, 56, 105, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(28, 56, 105, 0); }
+}
+
+.pw-activity-text {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.pw-activity-text p { margin: 0 0 6px; }
+.pw-activity-text p:last-child { margin-bottom: 0; }
+
+.pw-activity-text pre {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 6px;
+  padding: 8px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.pw-activity-text code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.pw-activity-tool {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.pw-activity-tool--running {
+  color: var(--text-secondary);
+}
+
+.pw-activity-tool--done {
+  color: var(--text-tertiary);
+  opacity: 0.78;
+}
+
+.pw-activity-tool--done > svg {
+  color: #22c55e;
+  opacity: 1;
+}
+
+.pw-activity-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #d97706;
+  padding: 4px 0;
+}
+
+.pw-activity-typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.pw-activity-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  animation: typing-bounce 1.2s ease infinite;
+}
+
+.pw-activity-typing span:nth-child(2) { animation-delay: 0.2s; }
+.pw-activity-typing span:nth-child(3) { animation-delay: 0.4s; }
+
 @media (max-width: 768px) {
   .pw-sidebar { display: none; }
+  .pw-activity { margin-left: 0; max-width: 100%; }
 }

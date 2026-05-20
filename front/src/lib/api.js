@@ -121,6 +121,24 @@ export const api = {
       },
     }).then(r => r.json()).catch(() => {}),
 
+  getSession: (projectId) =>
+    fetch(`${API_URL}/api/projects/${projectId}/session`, {
+      method: 'GET',
+      headers: {
+        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+      },
+    }).then(r => r.json()).catch(() => ({ status: 'none' })),
+
+  openActiveStream: (projectId) => {
+    const token = getToken()
+    return fetch(`${API_URL}/api/projects/${projectId}/session/active-stream`, {
+      method: 'GET',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+  },
+
   endSession: (projectId) =>
     fetch(`${API_URL}/api/projects/${projectId}/session`, {
       method: 'DELETE',

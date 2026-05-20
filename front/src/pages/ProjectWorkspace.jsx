@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ExternalLink, GitBranch, Pencil, Check, X,
-  Send, Bot, User, Copy, CheckCheck, Loader2, Code, GitBranch as GitPush,
-  ShieldAlert, RotateCcw, Globe, EyeOff
+  Send, Bot, User, Copy, CheckCheck, Loader2,
+  Globe, EyeOff, Zap,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { api } from '../lib/api'
@@ -35,7 +35,6 @@ REGLAS ADICIONALES:
 - NO creés proyectos nuevos desde acá`
 
 const DEFAULT_MODEL = 'claude-sonnet-4-5'
-
 const CONNECTORS = ['workspaceSandbox']
 
 const TOOL_PROGRESS = {
@@ -44,16 +43,17 @@ const TOOL_PROGRESS = {
   list_files:    ()  => 'Listando archivos',
   bash:          (a) => `$ ${a.cmd || ''}`,
   git_push:      (a) => `Pusheando: ${a.message || ''}`,
-  // Mantener nombres viejos por compatibilidad con proyectos que aún usen sandbox-agent
-  sandbox_write_file:    (a) => `Escribiendo ${a.filePath || 'archivo'}`,
-  sandbox_read_file:     (a) => `Leyendo ${a.filePath || 'archivo'}`,
-  sandbox_list_files:    ()  => 'Listando archivos',
-  sandbox_build:         ()  => 'Pusheando y esperando pipeline CI...',
-  sandbox_status:        ()  => 'Revisando estado',
+  sandbox_write_file: (a) => `Escribiendo ${a.filePath || 'archivo'}`,
+  sandbox_read_file:  (a) => `Leyendo ${a.filePath || 'archivo'}`,
+  sandbox_list_files: ()  => 'Listando archivos',
+  sandbox_build:      ()  => 'Pusheando y esperando pipeline CI...',
+  sandbox_status:     ()  => 'Revisando estado',
 }
 
 const STATUS_COLORS = { running: '#22c55e', stopped: '#888', creating: '#eab308', error: '#ef4444' }
-const STATUS_LABELS  = { running: 'Activo', stopped: 'Detenido', creating: 'Creando...', error: 'Error' }
+const STATUS_LABELS = { running: 'Activo', stopped: 'Detenido', creating: 'Creando...', error: 'Error' }
+
+const emptyActivity = () => ({ events: [], status: 'idle' })
 
 export default function ProjectWorkspace() {
   const { id } = useParams()
@@ -65,7 +65,6 @@ export default function ProjectWorkspace() {
   const [messages, setMessages] = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
-  const [interrupted, setInterrupted] = useState(false)
 
   const [editingTitle, setEditingTitle] = useState(false)
   const [editingDesc, setEditingDesc]   = useState(false)
@@ -75,12 +74,17 @@ export default function ProjectWorkspace() {
   const [input, setInput]               = useState('')
   const [selectedModel] = useState(DEFAULT_MODEL)
   const [sending, setSending]           = useState(false)
-  const [progress, setProgress]         = useState([])
+  const [activity, setActivity]         = useState(emptyActivity())
+  const [workspaceStatus, setWorkspaceStatus] = useState('unknown') // unknown|starting|ready|none
   const [copied, setCopied]             = useState(null)
 
   const messagesEndRef = useRef(null)
   const inputRef       = useRef(null)
+  const activeStreamRef = useRef(null) // AbortController de la conexión actual
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // CARGA INICIAL
+  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
       try {
@@ -94,10 +98,6 @@ export default function ProjectWorkspace() {
         setMessages(msgs)
         setTitleDraft(proj.title)
         setDescDraft(proj.description || '')
-        // Si el último mensaje es del usuario, el backend puede estar procesando en background
-        if (msgs.length > 0 && msgs[msgs.length - 1].role === 'user') {
-          setInterrupted(true) // se muestra "procesando..." hasta que llegue la respuesta
-        }
       } catch (err) {
         setError(err.message)
       } finally {
@@ -113,9 +113,7 @@ export default function ProjectWorkspace() {
     const interval = setInterval(async () => {
       try {
         const updated = await api.getProject(id)
-        if (updated.status !== 'creating') {
-          setProject(updated)
-        }
+        if (updated.status !== 'creating') setProject(updated)
       } catch {}
     }, 5000)
     return () => clearInterval(interval)
@@ -124,42 +122,216 @@ export default function ProjectWorkspace() {
   // Arrancar pod de sesión cuando el proyecto cargue
   useEffect(() => {
     if (!project?.id || project.status === 'creating') return
-    api.startSession(project.id)
+    setWorkspaceStatus('starting')
+    api.startSession(project.id).then(r => {
+      if (r?.status === 'ready') setWorkspaceStatus('ready')
+    })
     return () => { api.endSession(project.id) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id])
 
-  // Polling: si el último mensaje es del usuario (backend procesando en background), esperar respuesta
+  // Polling del estado de la sesión mientras está "starting"
   useEffect(() => {
-    if (!interrupted || sending || !chat) return
-    let attempts = 0
-    const interval = setInterval(async () => {
-      attempts++
-      if (attempts > 80) { // 80 × 3s = 4 minutos máximo
-        setInterrupted(false)
-        clearInterval(interval)
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: 'No se recibió respuesta del servidor. Podés intentar enviar el mensaje de nuevo.',
-        }])
-        return
-      }
-      try {
-        const chatData = await api.getProjectChat(id)
-        const msgs = chatData.messages || []
-        if (msgs.length > 0 && msgs[msgs.length - 1].role === 'assistant') {
-          setMessages(msgs)
-          setInterrupted(false)
-          clearInterval(interval)
-        }
-      } catch {}
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [interrupted, sending, chat, id])
+    if (!project?.id || workspaceStatus === 'ready') return
+    let cancelled = false
+    const tick = async () => {
+      const s = await api.getSession(project.id)
+      if (cancelled) return
+      if (s?.status === 'ready') setWorkspaceStatus('ready')
+      else if (s?.status === 'starting') setWorkspaceStatus('starting')
+      else if (s?.status === 'none') setWorkspaceStatus('none')
+    }
+    tick()
+    const interval = setInterval(tick, 4000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [project?.id, workspaceStatus])
 
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, sending, progress])
+  }, [messages, sending, activity])
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // EVENT HANDLER — usado tanto por doSend() como por reconnectToActiveStream()
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleStreamEvent = useCallback((event) => {
+    if (event.type === 'workspace_starting') {
+      setWorkspaceStatus('starting')
+      return
+    }
+    if (event.type === 'workspace_ready') {
+      setWorkspaceStatus('ready')
+      return
+    }
+    if (event.type === 'thinking') {
+      // ignorado: la UI ya muestra la tarjeta de actividad
+      return
+    }
+    if (event.type === 'text') {
+      setActivity(prev => {
+        const events = [...prev.events]
+        const last = events[events.length - 1]
+        if (last && last.type === 'text') {
+          events[events.length - 1] = { ...last, content: last.content + event.content }
+        } else {
+          events.push({
+            id: `text-${Date.now()}-${Math.random()}`,
+            type: 'text',
+            content: event.content,
+          })
+        }
+        return { events, status: 'running' }
+      })
+      return
+    }
+    if (event.type === 'tool_start') {
+      const label = TOOL_PROGRESS[event.name]?.(event.args || {}) ?? event.name
+      setActivity(prev => ({
+        status: 'running',
+        events: [...prev.events, {
+          id: `tool-${Date.now()}-${Math.random()}`,
+          type: 'tool',
+          name: event.name,
+          label,
+          status: 'running',
+        }],
+      }))
+      return
+    }
+    if (event.type === 'tool_done') {
+      setActivity(prev => {
+        const events = [...prev.events]
+        for (let i = events.length - 1; i >= 0; i--) {
+          if (events[i].type === 'tool' && events[i].status === 'running') {
+            events[i] = { ...events[i], status: 'done' }
+            break
+          }
+        }
+        return { ...prev, events }
+      })
+      return
+    }
+    if (event.type === 'pushed') {
+      setActivity(prev => ({
+        ...prev,
+        events: [...prev.events, {
+          id: `push-${Date.now()}`,
+          type: 'info',
+          label: 'CI de GitLab desplegando...',
+        }],
+      }))
+      return
+    }
+    if (event.type === 'done') {
+      // Resumen final = último bloque de texto que escribió el bot.
+      // event.content viene con la concatenación completa (ya la vio el usuario en vivo),
+      // así que preferimos el último bloque como "veredicto".
+      let summary = ''
+      setActivity(prev => {
+        const textBlocks = prev.events.filter(e => e.type === 'text')
+        if (textBlocks.length > 0) {
+          summary = textBlocks[textBlocks.length - 1].content || ''
+        }
+        if (!summary.trim()) summary = event.content || ''
+        return emptyActivity()
+      })
+      queueMicrotask(() => {
+        if (summary.trim()) {
+          setMessages(prev => [...prev, { role: 'assistant', content: summary }])
+        }
+      })
+      return
+    }
+    if (event.type === 'error') {
+      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${event.message}` }])
+      setActivity(emptyActivity())
+    }
+  }, [])
+
+  // Lee SSE de un Response y dispara handleStreamEvent por cada evento
+  const consumeSSE = useCallback(async (response, { onEnd } = {}) => {
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let ended = false
+    try {
+      while (!ended) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop()
+        for (const part of parts) {
+          if (!part.startsWith('data: ')) continue
+          let event
+          try { event = JSON.parse(part.slice(6)) } catch { continue }
+          if (event.type === '_stream_ended' || event.type === 'no_active_stream') {
+            ended = true
+            onEnd?.(event)
+            break
+          }
+          handleStreamEvent(event)
+          if (event.type === 'done' || event.type === 'error') ended = true
+        }
+      }
+    } catch {}
+  }, [handleStreamEvent])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RECONEXIÓN: al montar, si el último mensaje es del usuario, intentar
+  // engancharse al stream activo del back
+  // ─────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!project?.id || !chat?.id) return
+    if (messages.length === 0) return
+    if (messages[messages.length - 1].role !== 'user') return
+    if (sending) return
+
+    let aborted = false
+    const ctrl = new AbortController()
+    activeStreamRef.current = ctrl
+
+    setSending(true)
+    ;(async () => {
+      try {
+        const res = await api.openActiveStream(project.id)
+        if (aborted || !res.ok) {
+          setSending(false)
+          return
+        }
+        let hadActiveStream = true
+        await consumeSSE(res, {
+          onEnd: (event) => {
+            if (event.type === 'no_active_stream') hadActiveStream = false
+          },
+        })
+        if (!aborted) {
+          setSending(false)
+          // Si no había stream activo, traer el mensaje final si quedó guardado
+          if (!hadActiveStream) {
+            try {
+              const chatData = await api.getProjectChat(id)
+              const msgs = chatData.messages || []
+              if (msgs.length > messages.length) setMessages(msgs)
+            } catch {}
+          }
+        }
+      } catch {
+        if (!aborted) setSending(false)
+      }
+    })()
+
+    return () => {
+      aborted = true
+      ctrl.abort()
+    }
+    // Solo correr una vez tras carga inicial
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, chat?.id])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ACCIONES DE EDICIÓN (igual que antes)
+  // ─────────────────────────────────────────────────────────────────────────
   const saveTitle = async () => {
     if (!titleDraft.trim()) return
     try {
@@ -193,13 +365,15 @@ export default function ProjectWorkspace() {
     return `${SANDBOX_SYSTEM_PROMPT} El proyecto activo es "${projectName}". Cuando uses las tools de sandbox, el projectName es siempre "${projectName}".`
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // ENVIAR MENSAJE
+  // ─────────────────────────────────────────────────────────────────────────
   const doSend = async (overrideInput) => {
     const text = (overrideInput ?? input).trim()
     if (!text || !chat) return
 
     setSending(true)
-    setProgress([])
-    setInterrupted(false)
+    setActivity(emptyActivity())
 
     const userMsg = { role: 'user', content: text }
     const newMessages = [...messages, userMsg]
@@ -216,53 +390,16 @@ export default function ProjectWorkspace() {
       ]
 
       const response = await api.streamMessage(chat.id, selectedModel, apiMessages, CONNECTORS, project.id)
-
       if (!response.ok) {
         const err = await response.json().catch(() => ({ error: 'Error del servidor' }))
         throw new Error(err.error || 'Error del servidor')
       }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const parts = buffer.split('\n\n')
-        buffer = parts.pop()
-
-        for (const part of parts) {
-          if (!part.startsWith('data: ')) continue
-          let event
-          try { event = JSON.parse(part.slice(6)) } catch { continue }
-
-          if (event.type === 'tool_start') {
-            const label = TOOL_PROGRESS[event.name]?.(event.args) ?? event.name
-            setProgress(prev => [...prev, { id: `${event.name}-${Date.now()}`, label, status: 'running' }])
-          } else if (event.type === 'tool_done') {
-            // Marcar el último en running como done
-            setProgress(prev => {
-              const idx = [...prev].reverse().findIndex(p => p.status === 'running')
-              if (idx === -1) return prev
-              const realIdx = prev.length - 1 - idx
-              return prev.map((p, i) => i === realIdx ? { ...p, status: 'done' } : p)
-            })
-          } else if (event.type === 'done') {
-            setMessages(prev => [...prev, { role: 'assistant', content: event.content }])
-            setProgress([])
-          } else if (event.type === 'error') {
-            setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${event.message}` }])
-            setProgress([])
-          }
-        }
-      }
+      await consumeSSE(response)
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }])
+      setActivity(emptyActivity())
     } finally {
       setSending(false)
-      setProgress([])
     }
   }
 
@@ -273,21 +410,15 @@ export default function ProjectWorkspace() {
     }
   }
 
-  const handleRetry = () => {
-    if (sending) return
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
-    if (!lastUserMsg) return
-    const lastIdx = messages.lastIndexOf(lastUserMsg)
-    setMessages(prev => prev.slice(0, lastIdx))
-    doSend(lastUserMsg.content)
-  }
-
   const copyMsg = (text, idx) => {
     navigator.clipboard.writeText(text)
     setCopied(idx)
     setTimeout(() => setCopied(null), 2000)
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // RENDER GATES
+  // ─────────────────────────────────────────────────────────────────────────
   if (loading) return (
     <div className="pw-loading"><Loader2 size={24} className="pw-spin" /></div>
   )
@@ -316,6 +447,9 @@ export default function ProjectWorkspace() {
       <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => navigate('/proyectos')}>Volver al hub</button>
     </div>
   )
+
+  const hasActivity = activity.events.length > 0
+  const showStartingBanner = workspaceStatus === 'starting'
 
   return (
     <div className="pw-root">
@@ -428,8 +562,19 @@ export default function ProjectWorkspace() {
 
         {/* CHAT */}
         <div className="pw-chat">
+          {/* Banner persistente cuando el workspace está arrancando */}
+          {showStartingBanner && (
+            <div className="pw-workspace-banner">
+              <Loader2 size={14} className="pw-spin" />
+              <div className="pw-workspace-banner-content">
+                <strong>Iniciando espacio de trabajo</strong>
+                <span>Estoy levantando tu entorno de desarrollo. Puede tardar hasta 2 minutos la primera vez.</span>
+              </div>
+            </div>
+          )}
+
           <div className="pw-messages">
-            {messages.length === 0 && (
+            {messages.length === 0 && !sending && (
               <div className="pw-welcome">
                 <Bot size={32} />
                 <p>Hola, soy tu asistente para este proyecto. Puedo crear y modificar archivos, buildear la preview y pushear a GitLab. ¿En qué empezamos?</p>
@@ -456,34 +601,11 @@ export default function ProjectWorkspace() {
               </div>
             ))}
 
-            {/* Interrupted / background processing banner */}
-            {interrupted && !sending && (
-              <div className="pw-interrupted">
-                <Loader2 size={13} className="pw-spin" />
-                <span>Procesando en segundo plano...</span>
-              </div>
+            {/* TARJETA DE ACTIVIDAD EN VIVO */}
+            {(hasActivity || (sending && !hasActivity)) && (
+              <ActivityCard activity={activity} sending={sending} workspaceStatus={workspaceStatus} />
             )}
 
-            {/* Progress updates */}
-            {progress.length > 0 && (
-              <div className="pw-progress-list">
-                {progress.map(p => (
-                  <div key={p.id} className={`pw-progress-item pw-progress-${p.status}`}>
-                    {p.status === 'running' ? <Loader2 size={12} className="pw-spin" /> : <Check size={12} />}
-                    <span>{p.label}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {sending && (
-              <div className="pw-msg pw-msg-assistant">
-                <div className="pw-msg-avatar"><Bot size={14} /></div>
-                <div className="pw-msg-body pw-typing">
-                  <span /><span /><span />
-                </div>
-              </div>
-            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -511,6 +633,59 @@ export default function ProjectWorkspace() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tarjeta de actividad en vivo: texto del bot + tools intercaladas
+// ─────────────────────────────────────────────────────────────────────────────
+function ActivityCard({ activity, sending, workspaceStatus }) {
+  const empty = activity.events.length === 0
+  const initialLabel = workspaceStatus === 'starting'
+    ? 'Esperando que arranque el espacio de trabajo...'
+    : 'Pensando...'
+
+  return (
+    <div className="pw-activity">
+      <div className="pw-activity-header">
+        <span className="pw-activity-pulse" />
+        <span>{empty ? initialLabel : 'Trabajando en tu pedido...'}</span>
+      </div>
+
+      {activity.events.map(ev => {
+        if (ev.type === 'text') {
+          return (
+            <div key={ev.id} className="pw-activity-text">
+              <ReactMarkdown>{ev.content}</ReactMarkdown>
+            </div>
+          )
+        }
+        if (ev.type === 'tool') {
+          return (
+            <div key={ev.id} className={`pw-activity-tool pw-activity-tool--${ev.status}`}>
+              {ev.status === 'running'
+                ? <Loader2 size={12} className="pw-spin" />
+                : <Check size={12} />
+              }
+              <span>{ev.label}</span>
+            </div>
+          )
+        }
+        if (ev.type === 'info') {
+          return (
+            <div key={ev.id} className="pw-activity-info">
+              <Zap size={12} />
+              <span>{ev.label}</span>
+            </div>
+          )
+        }
+        return null
+      })}
+
+      {empty && sending && (
+        <div className="pw-activity-typing"><span /><span /><span /></div>
+      )}
     </div>
   )
 }

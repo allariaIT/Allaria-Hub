@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js'
 import { getToolsForConnectors, executeTool, CONFIRMABLE_TOOLS } from '../lib/tools.js'
 import { createSessionPod, waitForPodReady } from '../lib/k8s.js'
 import { pollGitlabPipeline } from '../lib/sandbox-tools.js'
+import { startStream, pushEvent, endStream } from '../lib/active-streams.js'
 
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN
 
@@ -327,7 +328,19 @@ proxyRouter.post('/stream', async (req, res) => {
   }
 })
 
-async function handleWorkspaceStream(req, res, { chatId, messages, projectId, send, heartbeat }) {
+async function handleWorkspaceStream(req, res, { chatId, messages, projectId, send: rawSend, heartbeat }) {
+  // Inicializar buffer de stream activo para que clientes que se reconecten
+  // puedan recuperar lo que se perdió
+  startStream(chatId)
+
+  // Wrappear send: escribir al cliente original Y al buffer (que reparte a reconectados)
+  const send = (event) => {
+    rawSend(event)
+    pushEvent(chatId, event)
+  }
+
+  let streamFinalStatus = 'done'
+
   try {
     const lastUserMsg = messages[messages.length - 1]
 
@@ -336,6 +349,7 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
     try {
       session = await getOrCreateSession(req.user.id, projectId)
     } catch (err) {
+      streamFinalStatus = 'error'
       send({ type: 'error', message: `Error iniciando sesión: ${err.message}` })
       return
     }
@@ -343,14 +357,16 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
     // Esperar que el pod esté ready
     let podIP = session.podIP
     if (!podIP || session.status === 'starting') {
-      send({ type: 'thinking', message: 'Preparando el agente...' })
+      send({ type: 'workspace_starting', message: 'Iniciando espacio de trabajo...' })
       try {
         podIP = await waitForPodReady(session.podName, 120_000)
         await prisma.session.update({
           where: { id: session.id },
           data: { podIP, status: 'ready', lastActivity: new Date() },
         })
+        send({ type: 'workspace_ready' })
       } catch (err) {
+        streamFinalStatus = 'error'
         send({ type: 'error', message: `El agente no pudo iniciar: ${err.message}` })
         return
       }
@@ -418,7 +434,10 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
     }
   } catch (err) {
     console.error('[workspace stream] error:', err.message)
+    streamFinalStatus = 'error'
     send({ type: 'error', message: err.message })
+  } finally {
+    endStream(chatId, streamFinalStatus)
   }
 }
 

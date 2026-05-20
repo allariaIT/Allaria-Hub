@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { createSessionPod, waitForPodReady, deleteSessionPod } from '../lib/k8s.js'
+import { subscribe, unsubscribe, getSnapshot } from '../lib/active-streams.js'
 
 export const sessionsRouter = Router({ mergeParams: true })
 
@@ -72,6 +73,47 @@ sessionsRouter.get('/', async (req, res) => {
     res.json({ sessionId: session.id, status: session.status, podIP: session.podIP })
   } catch (err) {
     res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /api/projects/:id/active-stream — SSE de reconexión a un stream en curso
+sessionsRouter.get('/active-stream', async (req, res) => {
+  try {
+    const { id: projectId } = req.params
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, userId: req.user.id },
+    })
+    if (!project) return res.status(404).json({ error: 'Proyecto no encontrado' })
+    if (!project.chatId) return res.status(404).json({ error: 'Proyecto sin chat asociado' })
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no')
+    res.flushHeaders()
+
+    const chatId = project.chatId
+    const snapshot = getSnapshot(chatId)
+
+    if (!snapshot) {
+      res.write(`data: ${JSON.stringify({ type: 'no_active_stream' })}\n\n`)
+      res.end()
+      return
+    }
+
+    const heartbeat = setInterval(() => {
+      try { res.write(': ping\n\n') } catch {}
+    }, 15000)
+
+    req.on('close', () => {
+      clearInterval(heartbeat)
+      unsubscribe(chatId, res)
+    })
+
+    subscribe(chatId, res)
+  } catch (err) {
+    console.error('[active-stream] error:', err.message)
+    try { res.end() } catch {}
   }
 })
 
