@@ -13,35 +13,43 @@ import './ProjectWorkspace.css'
 const SANDBOX_SYSTEM_PROMPT = `Sos el asistente de desarrollo de este proyecto web.
 
 REGLA FUNDAMENTAL — SIN EXCEPCIONES:
-Nunca digas "listo", "hecho", "cambié X" ni des por completada ninguna tarea sin haber ejecutado TODOS los pasos del flujo obligatorio. Si el usuario pide un cambio y vos respondés sin llamar a las tools, es un error grave. La única respuesta válida ante cualquier pedido de modificación es ejecutar el flujo completo.
+Nunca digas "listo", "hecho" ni des por completada ninguna tarea sin haber ejecutado el flujo completo.
 
-FLUJO OBLIGATORIO para cualquier modificación (todos los pasos, sin omitir ninguno):
-1. sandbox_read_file — Leé el archivo actual para no perder código existente
-2. sandbox_write_file — Escribí el archivo completo con los cambios aplicados
-3. sandbox_build — Pushea el código, dispara el pipeline CI y espera que el deploy termine. Cuando retorna ok=true, la preview ya está actualizada.
-4. Recién después de completar los 3 pasos anteriores, confirmá al usuario: "✅ Listo, probalo: [previewUrl]"
+FLUJO OBLIGATORIO para cualquier modificación:
+1. read_file — Leé el archivo actual antes de modificar
+2. write_file — Escribí el archivo completo con los cambios aplicados
+3. git_push — Commitea y pushea los cambios. El CI de GitLab buildea y deploya automáticamente.
+4. Confirmá al usuario: "✅ Pusheado. El CI está desplegando (~5min). Podés verlo en la preview."
 
-Si sandbox_build retorna error, reportá el error al usuario. NO digas "listo".
-Si el usuario pregunta algo sin pedir modificaciones, respondé directamente sin ejecutar el flujo.
+HERRAMIENTAS DISPONIBLES:
+- read_file(path) — leer un archivo del proyecto
+- write_file(path, content) — escribir un archivo completo
+- list_files() — ver estructura del proyecto
+- bash(cmd) — ejecutar npm install, npm run, etc.
+- git_push(message) — commitear y pushear todos los cambios
 
 REGLAS ADICIONALES:
-- Cuando el usuario pregunte "¿en qué estábamos?" o similar, leé PRIMERO el CHANGELOG.md con sandbox_read_file.
-- Cada vez que modifiques archivos, actualizá también CHANGELOG.md con fecha y descripción del cambio.
-- NO creés proyectos nuevos. Solo trabajás dentro del proyecto activo indicado abajo.
-
-Tools disponibles: sandbox_write_file, sandbox_read_file, sandbox_list_files, sandbox_build, sandbox_status.`
+- Para instalar librerías: bash("npm install <paquete>") → write_file → git_push
+- Si el usuario pregunta "¿en qué estábamos?", leé CHANGELOG.md primero con read_file
+- Actualizá CHANGELOG.md con fecha y descripción de cada cambio
+- NO creés proyectos nuevos desde acá`
 
 const DEFAULT_MODEL = 'claude-sonnet-4-5'
 
 const CONNECTORS = ['workspaceSandbox']
 
 const TOOL_PROGRESS = {
+  write_file:    (a) => `Escribiendo ${a.path || 'archivo'}`,
+  read_file:     (a) => `Leyendo ${a.path || 'archivo'}`,
+  list_files:    ()  => 'Listando archivos',
+  bash:          (a) => `$ ${a.cmd || ''}`,
+  git_push:      (a) => `Pusheando: ${a.message || ''}`,
+  // Mantener nombres viejos por compatibilidad con proyectos que aún usen sandbox-agent
   sandbox_write_file:    (a) => `Escribiendo ${a.filePath || 'archivo'}`,
   sandbox_read_file:     (a) => `Leyendo ${a.filePath || 'archivo'}`,
   sandbox_list_files:    ()  => 'Listando archivos',
   sandbox_build:         ()  => 'Pusheando y esperando pipeline CI...',
   sandbox_status:        ()  => 'Revisando estado',
-  sandbox_create_project:(a) => `Creando proyecto "${a.name || ''}"`,
 }
 
 const STATUS_COLORS = { running: '#22c55e', stopped: '#888', creating: '#eab308', error: '#ef4444' }
@@ -112,6 +120,13 @@ export default function ProjectWorkspace() {
     }, 5000)
     return () => clearInterval(interval)
   }, [project?.status, id])
+
+  // Arrancar pod de sesión cuando el proyecto cargue
+  useEffect(() => {
+    if (!project?.id) return
+    api.startSession(project.id)
+    return () => { api.endSession(project.id) }
+  }, [project?.id])
 
   // Polling: si el último mensaje es del usuario (backend procesando en background), esperar respuesta
   useEffect(() => {
@@ -200,7 +215,7 @@ export default function ProjectWorkspace() {
           .map(m => ({ role: m.role, content: m.content })),
       ]
 
-      const response = await api.streamMessage(chat.id, selectedModel, apiMessages, CONNECTORS)
+      const response = await api.streamMessage(chat.id, selectedModel, apiMessages, CONNECTORS, project.id)
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({ error: 'Error del servidor' }))

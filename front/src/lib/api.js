@@ -86,7 +86,7 @@ export const api = {
       body: JSON.stringify({ chatId, model, connectors, llmMessages, confirmations }),
     }),
 
-  streamMessage: (chatId, model, messages, connectors = []) => {
+  streamMessage: (chatId, model, messages, connectors = [], projectId) => {
     const token = getToken()
     return fetch(`${API_URL}/api/chat/stream`, {
       method: 'POST',
@@ -94,7 +94,7 @@ export const api = {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ chatId, model, messages, connectors }),
+      body: JSON.stringify({ chatId, model, messages, connectors, ...(projectId ? { projectId } : {}) }),
     })
   },
 
@@ -111,4 +111,22 @@ export const api = {
   unpublishProject: (id) => request(`/api/projects/${id}/unpublish`, { method: 'PATCH' }),
   starProject: (id) => request(`/api/projects/${id}/star`, { method: 'POST' }),
   unstarProject: (id) => request(`/api/projects/${id}/star`, { method: 'DELETE' }),
+
+  startSession: (projectId) =>
+    fetch(`${API_URL}/api/projects/${projectId}/session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+      },
+    }).then(r => r.json()).catch(() => {}),
+
+  endSession: (projectId) =>
+    fetch(`${API_URL}/api/projects/${projectId}/session`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+      },
+    }).then(r => r.json()).catch(() => {}),
 }
