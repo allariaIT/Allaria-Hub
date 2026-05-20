@@ -345,7 +345,7 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
     if (!podIP || session.status === 'starting') {
       send({ type: 'thinking', message: 'Preparando el agente...' })
       try {
-        podIP = await waitForPodReady(session.podName, 60_000)
+        podIP = await waitForPodReady(session.podName, 120_000)
         await prisma.session.update({
           where: { id: session.id },
           data: { podIP, status: 'ready', lastActivity: new Date() },
