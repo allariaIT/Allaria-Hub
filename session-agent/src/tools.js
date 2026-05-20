@@ -27,53 +27,68 @@ function walkDir(dir, prefix = '') {
 
 export const toolDefinitions = [
   {
-    name: 'read_file',
-    description: 'Lee el contenido de un archivo del proyecto.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        path: { type: 'string', description: 'Path relativo desde la raíz del proyecto (ej: "src/App.jsx")' },
+    type: 'function',
+    function: {
+      name: 'read_file',
+      description: 'Lee el contenido de un archivo del proyecto.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Path relativo desde la raíz del proyecto (ej: "src/App.jsx")' },
+        },
+        required: ['path'],
       },
-      required: ['path'],
     },
   },
   {
-    name: 'write_file',
-    description: 'Escribe o sobreescribe un archivo del proyecto con el contenido completo.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        path: { type: 'string', description: 'Path relativo del archivo' },
-        content: { type: 'string', description: 'Contenido completo del archivo' },
+    type: 'function',
+    function: {
+      name: 'write_file',
+      description: 'Escribe o sobreescribe un archivo del proyecto con el contenido completo.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Path relativo del archivo' },
+          content: { type: 'string', description: 'Contenido completo del archivo' },
+        },
+        required: ['path', 'content'],
       },
-      required: ['path', 'content'],
     },
   },
   {
-    name: 'list_files',
-    description: 'Lista la estructura de archivos del proyecto.',
-    input_schema: { type: 'object', properties: {} },
-  },
-  {
-    name: 'bash',
-    description: 'Ejecuta un comando de desarrollo. Permitidos: npm, npx, node, cat, ls, mkdir, cp, mv.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        cmd: { type: 'string', description: 'Comando a ejecutar (ej: "npm install react-query")' },
-      },
-      required: ['cmd'],
+    type: 'function',
+    function: {
+      name: 'list_files',
+      description: 'Lista la estructura de archivos del proyecto.',
+      parameters: { type: 'object', properties: {} },
     },
   },
   {
-    name: 'git_push',
-    description: 'Commitea y pushea los cambios al repositorio. Llamá esto cuando terminés todos los cambios de la tarea.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string', description: 'Mensaje descriptivo del commit' },
+    type: 'function',
+    function: {
+      name: 'bash',
+      description: 'Ejecuta un comando de desarrollo. Permitidos: npm, npx, node, cat, ls, mkdir, cp, mv.',
+      parameters: {
+        type: 'object',
+        properties: {
+          cmd: { type: 'string', description: 'Comando a ejecutar (ej: "npm install react-query")' },
+        },
+        required: ['cmd'],
       },
-      required: ['message'],
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_push',
+      description: 'Commitea y pushea los cambios al repositorio. Llamá esto cuando terminés todos los cambios de la tarea.',
+      parameters: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: 'Mensaje descriptivo del commit' },
+        },
+        required: ['message'],
+      },
     },
   },
 ]

@@ -1,17 +1,33 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { toolDefinitions, executeTool } from './tools.js'
 
 const MODEL = 'claude-sonnet-4-5'
 const MAX_ROUNDS = 20
 
-export async function* runAgent(userMessage, history, systemPrompt) {
-  const client = new Anthropic({
-    apiKey: process.env.LITELLM_KEY,
-    baseURL: process.env.LITELLM_BASE_URL,
+async function callLiteLLM(messages) {
+  const url = `${process.env.LITELLM_BASE_URL}/v1/chat/completions`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.LITELLM_KEY}`,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 8192,
+      messages,
+      tools: toolDefinitions,
+    }),
   })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`LiteLLM ${res.status}: ${err}`)
+  }
+  return res.json()
+}
 
-  // history es array de { role: 'user'|'assistant', content: string }
+export async function* runAgent(userMessage, history, systemPrompt) {
   const messages = [
+    { role: 'system', content: systemPrompt },
     ...history.map(m => ({ role: m.role, content: m.content })),
     { role: 'user', content: userMessage },
   ]
@@ -19,59 +35,46 @@ export async function* runAgent(userMessage, history, systemPrompt) {
   let rounds = 0
 
   while (rounds < MAX_ROUNDS) {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages,
-      tools: toolDefinitions,
-    })
+    const data = await callLiteLLM(messages)
+    const choice = data.choices?.[0]
+    if (!choice) throw new Error('Respuesta vacía de LiteLLM')
 
-    // Emitir texto de la respuesta
-    for (const block of response.content) {
-      if (block.type === 'text' && block.text) {
-        yield { type: 'text', content: block.text }
-      }
+    const msg = choice.message
+
+    if (msg.content) {
+      yield { type: 'text', content: msg.content }
     }
 
-    if (response.stop_reason === 'end_turn') break
-
-    if (response.stop_reason === 'max_tokens') {
+    const reason = choice.finish_reason
+    if (reason === 'stop' || reason === 'end_turn') break
+    if (reason === 'length') {
       yield { type: 'error', message: 'Respuesta truncada por límite de tokens. Podés pedirme que continúe.' }
       break
     }
 
-    if (response.stop_reason === 'tool_use') {
-      messages.push({ role: 'assistant', content: response.content })
+    if (reason === 'tool_calls' && msg.tool_calls?.length) {
+      messages.push({ role: 'assistant', content: msg.content || null, tool_calls: msg.tool_calls })
 
-      const toolResults = []
+      for (const toolCall of msg.tool_calls) {
+        const name = toolCall.function.name
+        let args
+        try { args = JSON.parse(toolCall.function.arguments) } catch { args = {} }
 
-      for (const block of response.content) {
-        if (block.type !== 'tool_use') continue
-
-        yield { type: 'tool_start', name: block.name, args: block.input }
+        yield { type: 'tool_start', name, args }
 
         let result
-        try {
-          result = await executeTool(block.name, block.input)
-        } catch (err) {
-          result = { error: err.message }
-        }
+        try { result = await executeTool(name, args) }
+        catch (err) { result = { error: err.message } }
 
-        yield { type: 'tool_done', name: block.name, result }
+        yield { type: 'tool_done', name, result }
 
-        if (block.name === 'git_push' && result.ok) {
+        if (name === 'git_push' && result.ok) {
           yield { type: 'pushed', commit: result.commit, filesChanged: result.filesChanged }
         }
 
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: JSON.stringify(result),
-        })
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) })
       }
 
-      messages.push({ role: 'user', content: toolResults })
       rounds++
       continue
     }
