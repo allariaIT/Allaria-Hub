@@ -9,8 +9,10 @@ const GITLAB_URL = process.env.GITLAB_URL || 'https://gitlab.allaria.xyz'
 
 function repoUrlWithAuth(url) {
   if (!url || !GITLAB_TOKEN) return url
-  const base = url.endsWith('.git') ? url : url + '.git'
-  return base.replace(/https:\/\/gitlab\.allaria\.xyz/, `https://oauth2:${GITLAB_TOKEN}@gitlab.allaria.xyz`)
+  // Usar IP directa + HTTP para evitar ELB→nginx que no tiene vhost de GitLab
+  const path = url.replace(/https?:\/\/gitlab\.allaria\.xyz/, '')
+  const base = path.endsWith('.git') ? path : path + '.git'
+  return `http://oauth2:${GITLAB_TOKEN}@172.30.200.101${base}`
 }
 
 async function findActiveSession(userId, projectId) {

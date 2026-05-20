@@ -35,11 +35,12 @@ export async function createSessionPod(sessionId, repoUrl, litellmUrl, litellmKe
           ports: [{ containerPort: 3200 }],
           env: [
             { name: 'REPO_URL', value: repoUrl },
-            { name: 'LITELLM_URL', value: litellmUrl || process.env.LITELLM_URL },
             { name: 'LITELLM_KEY', value: litellmKey || process.env.LITELLM_KEY },
             { name: 'SESSION_ID', value: sessionId },
             { name: 'BACK_URL', value: backUrl || 'http://back.allaria-hub.svc.cluster.local:3098' },
             { name: 'GIT_SSL_NO_VERIFY', value: '1' },
+            // SDK Anthropic necesita base URL sin path (agrega /v1/messages internamente)
+            { name: 'LITELLM_BASE_URL', value: 'http://172.30.200.101:4000' },
           ],
           resources: {
             requests: { cpu: '10m', memory: '64Mi' },

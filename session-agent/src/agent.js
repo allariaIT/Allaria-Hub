@@ -7,7 +7,7 @@ const MAX_ROUNDS = 20
 export async function* runAgent(userMessage, history, systemPrompt) {
   const client = new Anthropic({
     apiKey: process.env.LITELLM_KEY,
-    baseURL: process.env.LITELLM_URL,
+    baseURL: process.env.LITELLM_BASE_URL,
   })
 
   // history es array de { role: 'user'|'assistant', content: string }
