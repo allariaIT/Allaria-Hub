@@ -98,7 +98,18 @@ export async function executeTool(name, input) {
     case 'read_file': {
       const resolved = safePath(input.path)
       if (!fs.existsSync(resolved)) return { error: `Archivo no encontrado: ${input.path}` }
-      return { content: fs.readFileSync(resolved, 'utf-8') }
+      const content = fs.readFileSync(resolved, 'utf-8')
+      const lines = content.split('\n')
+      const MAX_LINES = 150
+      if (lines.length > MAX_LINES) {
+        return {
+          content: lines.slice(0, MAX_LINES).join('\n'),
+          truncated: true,
+          totalLines: lines.length,
+          note: `Mostrando líneas 1-${MAX_LINES} de ${lines.length}. Si necesitás más, pedí un rango específico.`,
+        }
+      }
+      return { content }
     }
 
     case 'write_file': {
@@ -125,11 +136,13 @@ export async function executeTool(name, input) {
         encoding: 'utf-8',
         timeout: 300_000, // 5 min — npm install puede tardar
       })
-      return {
-        stdout: result.stdout || '',
-        stderr: result.stderr || '',
-        exitCode: result.status ?? 1,
-      }
+      // Truncar output para no explotar el contexto (npm install puede ser enorme)
+      const MAX_OUT = 2_000
+      let stdout = result.stdout || ''
+      let stderr = result.stderr || ''
+      if (stdout.length > MAX_OUT) stdout = '...[omitido]\n' + stdout.slice(-MAX_OUT)
+      if (stderr.length > MAX_OUT) stderr = '...[omitido]\n' + stderr.slice(-MAX_OUT)
+      return { stdout, stderr, exitCode: result.status ?? 1 }
     }
 
     case 'git_push': {

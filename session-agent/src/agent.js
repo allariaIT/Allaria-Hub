@@ -3,6 +3,18 @@ import { toolDefinitions, executeTool } from './tools.js'
 const MODEL = 'claude-sonnet-4-5'
 const MAX_ROUNDS = 20
 
+// Mantiene solo las últimas N rondas de tool calls para no explotar el contexto
+function pruneToolRounds(messages, maxRounds = 6) {
+  const roundStarts = messages.reduce((acc, m, i) => {
+    if (m.role === 'assistant' && m.tool_calls?.length) acc.push(i)
+    return acc
+  }, [])
+  if (roundStarts.length <= maxRounds) return messages
+  const keepFrom = roundStarts[roundStarts.length - maxRounds]
+  const firstRound = roundStarts[0]
+  return [...messages.slice(0, firstRound), ...messages.slice(keepFrom)]
+}
+
 async function callLiteLLM(messages) {
   const url = `${process.env.LITELLM_BASE_URL}/v1/chat/completions`
   const res = await fetch(url, {
@@ -39,7 +51,7 @@ export async function* runAgent(userMessage, history, systemPrompt) {
   let rounds = 0
 
   while (rounds < MAX_ROUNDS) {
-    const data = await callLiteLLM(messages)
+    const data = await callLiteLLM(pruneToolRounds(messages))
     const choice = data.choices?.[0]
     if (!choice) throw new Error('Respuesta vacía de LiteLLM')
 
@@ -76,11 +88,10 @@ export async function* runAgent(userMessage, history, systemPrompt) {
           yield { type: 'pushed', commit: result.commit, filesChanged: result.filesChanged }
         }
 
-        // Truncar resultados grandes para no explotar el contexto (ej: archivos grandes, npm output)
-        const MAX_RESULT = 12_000
+        const MAX_RESULT = 4_000
         let resultContent = JSON.stringify(result)
         if (resultContent.length > MAX_RESULT) {
-          resultContent = resultContent.slice(0, MAX_RESULT) + '…[truncado por tamaño]'
+          resultContent = resultContent.slice(0, MAX_RESULT) + '…[truncado]'
         }
         messages.push({ role: 'tool', tool_call_id: toolCall.id, content: resultContent })
       }
