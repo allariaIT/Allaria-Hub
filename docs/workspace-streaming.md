@@ -80,6 +80,33 @@ Caps del buffer:
 3. **Pantalla `creating` solo si chat vacío**: si hay mensajes, asumimos re-deploy y mantenemos al usuario en el workspace aunque status sea `creating` (defensa por si algún código viejo lo setea).
 4. **Race de setActivity / setMessages**: al recibir `done`, leer el último bloque de texto desde `activityRef.current` (síncrono), no desde el state dentro de un updater.
 
+## Lifecycle del session pod
+
+```
+Entrar al workspace
+  └─ front: api.startSession(projectId)
+  └─ back POST /api/projects/:id/session:
+       ├─ findActiveSession → si ya existe (no 'dead'), reusar y devolver status actual
+       └─ si no, createSessionPod() y crear fila Session(status='starting')
+       └─ DISPARA en background: waitForPodReady → actualiza DB a status='ready'
+  └─ front: polling cada 4s a GET /session
+       └─ cuando ve status='ready', oculta el banner amarillo
+
+Mientras el workspace está abierto: pod vive, refresca lastActivity con cada mensaje
+
+Salir del workspace
+  └─ NO se mata el pod (se removió el endSession del cleanup del useEffect)
+  └─ Volver al workspace en N minutos reusa el mismo pod sin cold start
+
+El pod muere por:
+  - Idle timeout en el session-agent (60min sin actividad) → SIGTERM auto
+  - Reconcile job del back (cada 5min): si lastActivity > 70min → deleteSessionPod + status='dead'
+  - DELETE /api/projects/:id (borrar proyecto) → mata todos los pods activos del proyecto
+  - Si createSessionPod falla en POST → status='dead' inmediato y rollback
+```
+
+**Importante**: el `waitForPodReady` corre en background en el POST. Sin esto, el status quedaba 'starting' en DB hasta que el usuario mandara un mensaje (que disparaba waitForPodReady dentro de handleWorkspaceStream), y el banner amarillo del front no se iba nunca.
+
 ## Archivos clave
 
 - `back/src/lib/active-streams.js` — buffer en memoria + pub/sub
