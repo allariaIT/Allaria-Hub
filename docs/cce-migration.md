@@ -225,6 +225,21 @@ El back-deployment.yaml ya tiene `serviceAccountName: hub-back`.
 | 5 | Pods zombie al borrar proyecto | `DELETE /api/projects/:id` no mataba pods activos | Se agregan `deleteSessionPod()` calls antes de borrar en DB |
 | 6 | Wait 120s al borrar con workspace abierto | 404 de pod eliminado no era manejado en `waitForPodReady` | Catch explícito de 404 → falla inmediatamente |
 | 7 | sandbox-agent caído (502 en crear proyectos) | Container parado por conflicto de nombres tras restart | `docker rm` del container viejo + `docker compose up -d` |
+| 8 | `fetch failed` después de varias llamadas al LLM | Node.js reutilizaba conexión keep-alive que LiteLLM cerraba → ECONNRESET | `Connection: close` en cada request a LiteLLM |
+| 9 | Timeout de operación abortada (5 min) | Tareas complejas (npm install + escribir varios archivos) superaban el timeout del proxy | Proxy back→pod subido de 5 a 15 min; bash tool de 2 a 5 min |
+| 10 | `prompt is too long — 208k tokens` | Tool results + rondas de tools acumuladas en el contexto sin límite | `pruneToolRounds()` ventana deslizante de 6 rondas; cap de 4KB por tool result; `read_file` limitado a 150 líneas; bash output últimas 2KB |
+
+#### Límites de tokens actuales
+
+| Fuente | Límite |
+|---|---|
+| Historial enviado al pod | Últimos 6 mensajes |
+| Tool rounds en contexto | Últimas 6 rondas (sliding window) |
+| Cada tool result | 4KB máx |
+| read_file | 150 líneas máx |
+| bash stdout/stderr | 2KB finales |
+| max_tokens respuesta LLM | 8192 |
+| **Peor caso estimado** | **~25k tokens** |
 
 ---
 
