@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
+import path from 'node:path'
 
 function run(cmd, args, cwd) {
   const result = spawnSync(cmd, args, { cwd, encoding: 'utf-8', timeout: 120_000 })
@@ -9,7 +10,7 @@ function run(cmd, args, cwd) {
 }
 
 export function gitClone(repoUrl, targetDir) {
-  if (fs.existsSync(targetDir)) {
+  if (fs.existsSync(path.join(targetDir, '.git'))) {
     run('git', ['pull', '--ff-only'], targetDir)
     return
   }
