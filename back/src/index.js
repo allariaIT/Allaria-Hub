@@ -9,6 +9,7 @@ import { projectsRouter } from './routes/projects.js'
 import { sessionsRouter } from './routes/sessions.js'
 import { prisma } from './lib/prisma.js'
 import { sandboxStatus } from './lib/sandbox-client.js'
+import { deleteSessionPod } from './lib/k8s.js'
 
 const app = express()
 const PORT = process.env.PORT || 3098
@@ -124,6 +125,24 @@ async function reconcileProjects() {
           await prisma.project.update({ where: { id: project.id }, data: { status: 'stopped' } }).catch(() => {})
           console.log(`[reconcile] ${project.name} → stopped (sandbox 404)`)
         }
+      }
+    }
+    // Pass 3: limpiar sesiones idle > 70 min
+    const seventyMinAgo = new Date(Date.now() - 70 * 60 * 1000)
+    const staleSessions = await prisma.session.findMany({
+      where: {
+        status: { not: 'dead' },
+        lastActivity: { lt: seventyMinAgo },
+      },
+    })
+
+    for (const session of staleSessions) {
+      try {
+        await deleteSessionPod(session.podName)
+        await prisma.session.update({ where: { id: session.id }, data: { status: 'dead' } })
+        console.log(`[reconcile] session ${session.id} → dead (idle timeout)`)
+      } catch (err) {
+        console.warn(`[reconcile] error limpiando sesión ${session.id}:`, err.message)
       }
     }
   } catch (err) {
