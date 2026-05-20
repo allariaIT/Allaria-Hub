@@ -44,7 +44,6 @@ sessionsRouter.post('/', async (req, res) => {
       process.env.LITELLM_KEY,
     )
 
-    let session
     try {
       session = await prisma.session.create({
         data: { id: sessionId, userId, projectId, podName, status: 'starting' },
