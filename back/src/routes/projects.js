@@ -251,6 +251,7 @@ projectsRouter.delete('/:id', async (req, res) => {
   if (project.gitlabId) {
     try { await deleteGitlabRepo(project.gitlabId) } catch {}
   }
+  await prisma.session.deleteMany({ where: { projectId: project.id } })
   await prisma.project.delete({ where: { id: project.id } })
   res.json({ ok: true })
 })
