@@ -128,14 +128,16 @@ export default function ProjectWorkspace() {
     return () => clearInterval(interval)
   }, [project?.status, id])
 
-  // Arrancar pod de sesión cuando el proyecto cargue
+  // Arrancar pod de sesión cuando el proyecto cargue.
+  // No matamos el pod al desmontar: el session-agent ya tiene idle timeout
+  // de 60min y el reconcile del back limpia sesiones >70min. Así, salir
+  // del workspace y volver reusa el mismo pod sin esperar cold start.
   useEffect(() => {
     if (!project?.id || project.status === 'creating') return
     setWorkspaceStatus('starting')
     api.startSession(project.id).then(r => {
       if (r?.status === 'ready') setWorkspaceStatus('ready')
     })
-    return () => { api.endSession(project.id) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id])
 
