@@ -327,9 +327,6 @@ proxyRouter.post('/stream', async (req, res) => {
 
 async function handleWorkspaceStream(req, res, { chatId, messages, projectId, send, heartbeat }) {
   try {
-    const chat = await prisma.chat.findFirst({ where: { id: chatId, userId: req.user.id } })
-    if (!chat) { send({ type: 'error', message: 'Chat no encontrado' }); return }
-
     const lastUserMsg = messages[messages.length - 1]
 
     // Obtener o crear sesión
