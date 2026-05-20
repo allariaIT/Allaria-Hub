@@ -123,7 +123,7 @@ export default function ProjectWorkspace() {
 
   // Arrancar pod de sesión cuando el proyecto cargue
   useEffect(() => {
-    if (!project?.id) return
+    if (!project?.id || project.status === 'creating') return
     api.startSession(project.id)
     return () => { api.endSession(project.id) }
   }, [project?.id])
