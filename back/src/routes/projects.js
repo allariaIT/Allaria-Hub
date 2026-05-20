@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { sandboxDelete, sandboxStop, sandboxStatus, sandboxCreateProject } from '../lib/sandbox-client.js'
 import { createGitlabRepo, deleteGitlabRepo } from '../lib/gitlab.js'
+import { deleteSessionPod } from '../lib/k8s.js'
 import { pollGitlabPipeline } from '../lib/sandbox-tools.js'
 
 export const projectsRouter = Router()
@@ -251,6 +252,12 @@ projectsRouter.delete('/:id', async (req, res) => {
   if (project.gitlabId) {
     try { await deleteGitlabRepo(project.gitlabId) } catch {}
   }
+  // Matar pods de sesión activos antes de borrar de la DB
+  const activeSessions = await prisma.session.findMany({
+    where: { projectId: project.id, status: { not: 'dead' } },
+  })
+  await Promise.all(activeSessions.map(s => deleteSessionPod(s.podName).catch(() => {})))
+
   await prisma.session.deleteMany({ where: { projectId: project.id } })
   await prisma.project.delete({ where: { id: project.id } })
   res.json({ ok: true })
