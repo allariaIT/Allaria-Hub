@@ -123,7 +123,7 @@ export async function executeTool(name, input) {
       const result = spawnSync(bin, parts.slice(1), {
         cwd: WORKSPACE,
         encoding: 'utf-8',
-        timeout: 120_000,
+        timeout: 300_000, // 5 min — npm install puede tardar
       })
       return {
         stdout: result.stdout || '',

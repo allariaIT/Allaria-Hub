@@ -366,7 +366,7 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
         message: lastUserMsg.content,
         history: messages.slice(0, -1),
       }),
-      signal: AbortSignal.timeout(300_000),
+      signal: AbortSignal.timeout(900_000), // 15 min — el agente puede tardar en tareas complejas
     })
 
     if (!podRes.ok) {
