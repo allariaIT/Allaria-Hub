@@ -38,9 +38,9 @@ const DEFAULT_MODEL = 'claude-sonnet-4-5'
 const CONNECTORS = ['workspaceSandbox']
 
 const PIPELINE_STAGES = [
-  { id: 'docker:build', emoji: '📦', label: 'Empaquetando tu app', durationKey: 'build' },
-  { id: 'deploy:server', emoji: '🚀', label: 'Lanzando al servidor', durationKey: 'deploy' },
-  { id: 'live', emoji: '🎉', label: '¡Tu app lista!', durationKey: null },
+  { id: 'build',  emoji: '📦', label: 'Empaquetando tu app',  durationKey: 'build' },
+  { id: 'deploy', emoji: '🚀', label: 'Lanzando al servidor', durationKey: 'deploy' },
+  { id: 'live',   emoji: '🎉', label: '¡Tu app lista!',       durationKey: null },
 ]
 
 const TOOL_PROGRESS = {

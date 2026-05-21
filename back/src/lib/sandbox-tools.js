@@ -69,8 +69,8 @@ export async function pollGitlabPipeline(gitlabId, afterTime, { onStage, maxAtte
                 )
                 return r.json()
               })()
-              const build = jobs.find(j => j.name === 'docker:build')
-              const deploy = jobs.find(j => j.name === 'deploy:server')
+              const build = jobs.find(j => j.name === 'build')
+              const deploy = jobs.find(j => j.name === 'deploy')
               if (build) duration.build = fmtDuration(build.started_at, build.finished_at)
               if (deploy) duration.deploy = fmtDuration(deploy.started_at, deploy.finished_at)
             } catch {}
