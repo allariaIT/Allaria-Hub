@@ -758,3 +758,85 @@ function ActivityCard({ activity, sending, workspaceStatus }) {
     </div>
   )
 }
+
+function PipelineTracker({ pipelineState, previewUrl, onRetry }) {
+  const { status, stages, duration, failedJob } = pipelineState
+
+  const header = {
+    running: 'Tu cambio está viajando…',
+    success: '¡Cambio publicado!',
+    error: 'Algo salió mal',
+  }[status]
+
+  const hint = {
+    running: '🔒 El chat se activa cuando tu app esté lista',
+    success: '✅ ¡Listo! Podés seguir haciendo cambios',
+    error: '⚠️ Chat desbloqueado — podés pedirme que reintente',
+  }[status]
+
+  return (
+    <div className={`pw-pipeline pw-pipeline--${status}`}>
+      <div className="pw-pipeline-header">
+        <span className={`pw-pipeline-dot pw-pipeline-dot--${status}`} />
+        <span>{header}</span>
+      </div>
+
+      {status === 'success' && (
+        <div className="pw-pipeline-celebration">
+          <span className="pw-pipeline-glow">🎉</span>
+          <div>
+            <div className="pw-pipeline-celebration-title">¡Tu app está en vivo!</div>
+            <div className="pw-pipeline-celebration-sub">Los cambios ya son visibles para todos</div>
+          </div>
+        </div>
+      )}
+
+      {PIPELINE_STAGES.map(def => {
+        const stage = stages.find(s => s.id === def.id) || { id: def.id, status: 'pending' }
+        const dur = def.durationKey ? duration[def.durationKey] : null
+
+        const sub = {
+          pending: 'Pronto…',
+          running: 'En camino…',
+          done: dur || 'Completado',
+          failed: 'No pudo completarse',
+        }[stage.status] ?? ''
+
+        return (
+          <div key={def.id} className={`pw-pipeline-step pw-pipeline-step--${stage.status}`}>
+            <div className={`pw-pipeline-icon${stage.status === 'running' ? ' pw-pipeline-icon--anim' : ''}`}>
+              {def.emoji}
+            </div>
+            <div className="pw-pipeline-step-info">
+              <div className="pw-pipeline-step-name">{def.label}</div>
+              <div className="pw-pipeline-step-sub">{sub}</div>
+            </div>
+            {stage.status === 'done' && <span className="pw-pipeline-check">✓</span>}
+            {stage.status === 'running' && <div className="pw-pipeline-spin" />}
+            {stage.status === 'failed' && <span className="pw-pipeline-x">✗</span>}
+          </div>
+        )
+      })}
+
+      {status === 'success' && previewUrl && (
+        <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="pw-pipeline-preview-btn">
+          🌐 Ver mi app →
+        </a>
+      )}
+
+      {status === 'error' && (
+        <p className="pw-pipeline-error-msg">
+          La app anterior sigue funcionando mientras resolvemos esto.
+        </p>
+      )}
+
+      {status === 'error' && (
+        <button className="pw-pipeline-retry-btn" onClick={onRetry}>
+          🔁 Pedirle a la IA que reintente
+        </button>
+      )}
+
+      <div className={`pw-pipeline-hint pw-pipeline-hint--${status}`}>{hint}</div>
+    </div>
+  )
+}
