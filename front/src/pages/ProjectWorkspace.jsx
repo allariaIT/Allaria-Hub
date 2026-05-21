@@ -276,7 +276,9 @@ export default function ProjectWorkspace() {
             break
           }
           handleStreamEvent(event)
-          if (event.type === 'done' || event.type === 'error') ended = true
+          if (event.type === 'error') ended = true
+          // No romper en 'done': el backend puede seguir enviando pipeline_stage/done/error
+          // hasta que mande _stream_ended, que cierra el stream definitivamente.
         }
       }
     } catch {}
