@@ -24,6 +24,7 @@ export async function pollGitlabPipeline(gitlabId, afterTime, { onStage, maxAtte
   const jobStates = {} // { jobName: lastKnownStatus } — evita emitir duplicados
 
   for (let i = 0; i < maxAttempts; i++) {
+    let cachedJobs = null
     try {
       const res = await fetch(
         `${GITLAB_URL}/api/v4/projects/${gitlabId}/pipelines?per_page=5&order_by=id&sort=desc`,
@@ -46,8 +47,8 @@ export async function pollGitlabPipeline(gitlabId, afterTime, { onStage, maxAtte
               `${GITLAB_URL}/api/v4/projects/${gitlabId}/pipelines/${pipelineId}/jobs`,
               { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN }, signal: AbortSignal.timeout(10000) }
             )
-            const jobs = await jobsRes.json()
-            for (const job of jobs) {
+            cachedJobs = await jobsRes.json()
+            for (const job of cachedJobs) {
               if (['running', 'success', 'failed'].includes(job.status) && jobStates[job.name] !== job.status) {
                 jobStates[job.name] = job.status
                 onStage(job.name, job.status)
@@ -61,11 +62,13 @@ export async function pollGitlabPipeline(gitlabId, afterTime, { onStage, maxAtte
             // Calcular duraciones desde started_at/finished_at de cada job
             let duration = {}
             try {
-              const jobsRes = await fetch(
-                `${GITLAB_URL}/api/v4/projects/${gitlabId}/pipelines/${pipelineId}/jobs`,
-                { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN }, signal: AbortSignal.timeout(10000) }
-              )
-              const jobs = await jobsRes.json()
+              const jobs = cachedJobs ?? await (async () => {
+                const r = await fetch(
+                  `${GITLAB_URL}/api/v4/projects/${gitlabId}/pipelines/${pipelineId}/jobs`,
+                  { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN }, signal: AbortSignal.timeout(10000) }
+                )
+                return r.json()
+              })()
               const build = jobs.find(j => j.name === 'docker:build')
               const deploy = jobs.find(j => j.name === 'deploy:server')
               if (build) duration.build = fmtDuration(build.started_at, build.finished_at)
