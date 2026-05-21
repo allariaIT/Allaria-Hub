@@ -271,6 +271,7 @@ export default function ProjectWorkspace() {
           ...prev,
           status: 'error',
           failedJob: event.failedJob || null,
+          errorMessage: event.message || null,
           stages: prev.stages.map(s =>
             s.id === event.failedJob ? { ...s, status: 'failed' } : s
           ),
@@ -667,7 +668,11 @@ export default function ProjectWorkspace() {
               <PipelineTracker
                 pipelineState={pipelineState}
                 previewUrl={project?.previewUrl}
-                onRetry={() => doSend('Por favor reintentá el deploy')}
+                onRetry={() => {
+                  const failedLabel = PIPELINE_STAGES.find(s => s.id === pipelineState?.failedJob)?.label || pipelineState?.failedJob || 'desconocida'
+                  const errMsg = pipelineState?.errorMessage ? ` El error fue: "${pipelineState.errorMessage}".` : ''
+                  doSend(`El pipeline de CI/CD falló en la etapa "${failedLabel}".${errMsg} Por favor intentá hacer el push y deploy de nuevo.`)
+                }}
               />
             )}
 
