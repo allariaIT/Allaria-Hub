@@ -426,7 +426,7 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
                   await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
                   send({ type: 'pipeline_error', failedJob: result.failedJob || null, message: result.message })
                 }
-              }).catch(() => {})
+              }).catch((err) => { console.error('[pipeline tracker] error inesperado:', err.message) })
             }
           }
         } catch {}
@@ -440,16 +440,17 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
       await prisma.chat.update({ where: { id: chatId }, data: { updatedAt: new Date() } })
     }
 
-    // Esperar a que termine el pipeline antes de cerrar el stream SSE.
-    // Así los eventos pipeline_stage/done/error llegan al cliente en vivo
-    // y quedan en el buffer para reconexiones.
-    if (pipelinePromise) await pipelinePromise
-
   } catch (err) {
     console.error('[workspace stream] error:', err.message)
     streamFinalStatus = 'error'
     send({ type: 'error', message: err.message })
   } finally {
+    // Esperar a que termine el pipeline antes de cerrar el stream SSE.
+    // Así los eventos pipeline_stage/done/error llegan al cliente en vivo
+    // y quedan en el buffer para reconexiones.
+    // Va en finally para que también se aguarde si el try lanzó una excepción
+    // (p.ej. reader.read() falla después de que pipelinePromise fue asignado).
+    if (pipelinePromise) await pipelinePromise
     endStream(chatId, streamFinalStatus)
   }
 }
