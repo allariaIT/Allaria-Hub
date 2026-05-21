@@ -395,6 +395,7 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
     const decoder = new TextDecoder()
     let assistantContent = ''
     let buffer = ''
+    let pipelinePromise = null
 
     while (true) {
       const { done, value } = await reader.read()
@@ -410,21 +411,21 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
           send(data)
           if (data.type === 'done') assistantContent = data.content
           if (data.type === 'pushed') {
-            // No cambiamos el status del proyecto a 'creating' acá: es un re-deploy,
-            // el container viejo sigue corriendo mientras el CI buildea el nuevo.
-            // Cambiar a 'creating' sacaría al usuario del workspace y le mostraría
-            // la pantalla de "proyecto nuevo" perdiendo el contexto del chat.
-            // Solo trackeamos el pipeline para marcar 'error' si falla.
+            // Re-deploy: el container viejo sigue corriendo. No tocar el status del proyecto.
+            // Iniciamos el tracker del pipeline — los eventos van al buffer SSE del chat
+            // para que persistan si el usuario se reconecta.
             const project = await prisma.project.findFirst({ where: { id: projectId } })
             if (project?.gitlabId) {
-              pollGitlabPipeline(project.gitlabId, new Date()).then(async (result) => {
-                if (!result.ok) {
-                  await prisma.project.update({
-                    where: { id: project.id },
-                    data: { status: 'error' },
-                  })
+              const pushTime = new Date()
+              pipelinePromise = pollGitlabPipeline(project.gitlabId, pushTime, {
+                onStage: (job, status) => send({ type: 'pipeline_stage', job, status }),
+              }).then(async (result) => {
+                if (result.ok) {
+                  send({ type: 'pipeline_done', duration: result.duration || {} })
+                } else {
+                  await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } })
+                  send({ type: 'pipeline_error', failedJob: result.failedJob || null, message: result.message })
                 }
-                // Si ok: dejamos status como está (típicamente 'running')
               }).catch(() => {})
             }
           }
@@ -438,6 +439,12 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
       })
       await prisma.chat.update({ where: { id: chatId }, data: { updatedAt: new Date() } })
     }
+
+    // Esperar a que termine el pipeline antes de cerrar el stream SSE.
+    // Así los eventos pipeline_stage/done/error llegan al cliente en vivo
+    // y quedan en el buffer para reconexiones.
+    if (pipelinePromise) await pipelinePromise
+
   } catch (err) {
     console.error('[workspace stream] error:', err.message)
     streamFinalStatus = 'error'
