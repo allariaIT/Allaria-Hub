@@ -340,6 +340,7 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
   }
 
   let streamFinalStatus = 'done'
+  let pipelinePromise = null
 
   try {
     const lastUserMsg = messages[messages.length - 1]
@@ -395,7 +396,6 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
     const decoder = new TextDecoder()
     let assistantContent = ''
     let buffer = ''
-    let pipelinePromise = null
 
     while (true) {
       const { done, value } = await reader.read()
