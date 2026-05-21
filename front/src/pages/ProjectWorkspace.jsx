@@ -37,6 +37,12 @@ REGLAS ADICIONALES:
 const DEFAULT_MODEL = 'claude-sonnet-4-5'
 const CONNECTORS = ['workspaceSandbox']
 
+const PIPELINE_STAGES = [
+  { id: 'docker:build', emoji: '📦', label: 'Empaquetando tu app', durationKey: 'build' },
+  { id: 'deploy:server', emoji: '🚀', label: 'Lanzando al servidor', durationKey: 'deploy' },
+  { id: 'live', emoji: '🎉', label: '¡Tu app lista!', durationKey: null },
+]
+
 const TOOL_PROGRESS = {
   write_file:    (a) => `Escribiendo ${a.path || 'archivo'}`,
   read_file:     (a) => `Leyendo ${a.path || 'archivo'}`,
@@ -77,6 +83,9 @@ export default function ProjectWorkspace() {
   const [activity, setActivity]         = useState(emptyActivity())
   const [workspaceStatus, setWorkspaceStatus] = useState('unknown') // unknown|starting|ready|none
   const [copied, setCopied]             = useState(null)
+  const [pipelineState, setPipelineState] = useState(null)
+  // null = sin pipeline activo/reciente
+  // { status: 'running'|'success'|'error', stages: [{id, status}], duration: {}, failedJob: null|string }
 
   const messagesEndRef = useRef(null)
   const inputRef       = useRef(null)
@@ -223,16 +232,53 @@ export default function ProjectWorkspace() {
       return
     }
     if (event.type === 'pushed') {
-      setActivitySync(prev => ({
-        ...prev,
-        events: [...prev.events, {
-          id: `push-${Date.now()}`,
-          type: 'info',
-          label: 'CI de GitLab desplegando...',
-        }],
-      }))
+      setPipelineState({
+        status: 'running',
+        stages: PIPELINE_STAGES.map(s => ({ id: s.id, status: 'pending' })),
+        duration: {},
+        failedJob: null,
+      })
       return
     }
+    if (event.type === 'pipeline_stage') {
+      setPipelineState(prev => {
+        if (!prev) return prev
+        const statusMap = { running: 'running', success: 'done', failed: 'failed' }
+        return {
+          ...prev,
+          stages: prev.stages.map(s =>
+            s.id === event.job ? { ...s, status: statusMap[event.status] ?? event.status } : s
+          ),
+        }
+      })
+      return
+    }
+
+    if (event.type === 'pipeline_done') {
+      setPipelineState(prev => prev ? {
+        ...prev,
+        status: 'success',
+        stages: prev.stages.map(s => ({ ...s, status: 'done' })),
+        duration: event.duration || {},
+      } : prev)
+      return
+    }
+
+    if (event.type === 'pipeline_error') {
+      setPipelineState(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          status: 'error',
+          failedJob: event.failedJob || null,
+          stages: prev.stages.map(s =>
+            s.id === event.failedJob ? { ...s, status: 'failed' } : s
+          ),
+        }
+      })
+      return
+    }
+
     if (event.type === 'done') {
       // Leer events sincrono del ref (state puede estar stale en handlers async).
       // Veredicto = último bloque de texto. Si está vacío, fallback al fullText
@@ -381,6 +427,7 @@ export default function ProjectWorkspace() {
 
     setSending(true)
     setActivitySync(emptyActivity())
+    setPipelineState(null)
 
     const userMsg = { role: 'user', content: text }
     const newMessages = [...messages, userMsg]
@@ -616,6 +663,14 @@ export default function ProjectWorkspace() {
               <ActivityCard activity={activity} sending={sending} workspaceStatus={workspaceStatus} />
             )}
 
+            {pipelineState && (
+              <PipelineTracker
+                pipelineState={pipelineState}
+                previewUrl={project?.previewUrl}
+                onRetry={() => doSend('Por favor reintentá el deploy')}
+              />
+            )}
+
             <div ref={messagesEndRef} />
           </div>
 
@@ -629,7 +684,11 @@ export default function ProjectWorkspace() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Pedile a la IA que cree archivos, modifique código, buildee..."
+              placeholder={
+                pipelineState?.status === 'running'
+                  ? '🔒 Tu app se está publicando, el chat se activa cuando esté lista...'
+                  : 'Pedile a la IA que cree archivos, modifique código, buildee...'
+              }
               rows={1}
               disabled={sending}
             />
