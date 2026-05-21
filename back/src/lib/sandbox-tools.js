@@ -10,9 +10,18 @@ const PREVIEW_BASE = process.env.SANDBOX_PREVIEW_URL || 'https://proyectos-sandb
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN
 const GITLAB_URL = process.env.GITLAB_URL || 'https://gitlab.allaria.xyz'
 
-export async function pollGitlabPipeline(gitlabId, afterTime, maxAttempts = 40, delayMs = 15000) {
+function fmtDuration(start, end) {
+  if (!start || !end) return null
+  const secs = Math.round((new Date(end) - new Date(start)) / 1000)
+  const m = Math.floor(secs / 60)
+  const s = secs % 60
+  return m > 0 ? `${m}m ${s}s` : `${s}s`
+}
+
+export async function pollGitlabPipeline(gitlabId, afterTime, { onStage, maxAttempts = 40, delayMs = 15000 } = {}) {
   await new Promise(r => setTimeout(r, 8000))
   let pipelineId = null
+  const jobStates = {} // { jobName: lastKnownStatus } — evita emitir duplicados
 
   for (let i = 0; i < maxAttempts; i++) {
     try {
@@ -29,9 +38,55 @@ export async function pollGitlabPipeline(gitlabId, afterTime, maxAttempts = 40, 
 
       if (pipelineId) {
         const p = pipelines.find(p => p.id === pipelineId)
+
+        // Consultar jobs para saber qué etapa está corriendo
+        if (onStage) {
+          try {
+            const jobsRes = await fetch(
+              `${GITLAB_URL}/api/v4/projects/${gitlabId}/pipelines/${pipelineId}/jobs`,
+              { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN }, signal: AbortSignal.timeout(10000) }
+            )
+            const jobs = await jobsRes.json()
+            for (const job of jobs) {
+              if (['running', 'success', 'failed'].includes(job.status) && jobStates[job.name] !== job.status) {
+                jobStates[job.name] = job.status
+                onStage(job.name, job.status)
+              }
+            }
+          } catch {}
+        }
+
         if (p) {
-          if (p.status === 'success') return { ok: true }
-          if (p.status === 'failed' || p.status === 'canceled') return { ok: false, message: `Pipeline CI ${p.status}` }
+          if (p.status === 'success') {
+            // Calcular duraciones desde started_at/finished_at de cada job
+            let duration = {}
+            try {
+              const jobsRes = await fetch(
+                `${GITLAB_URL}/api/v4/projects/${gitlabId}/pipelines/${pipelineId}/jobs`,
+                { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN }, signal: AbortSignal.timeout(10000) }
+              )
+              const jobs = await jobsRes.json()
+              const build = jobs.find(j => j.name === 'docker:build')
+              const deploy = jobs.find(j => j.name === 'deploy:server')
+              if (build) duration.build = fmtDuration(build.started_at, build.finished_at)
+              if (deploy) duration.deploy = fmtDuration(deploy.started_at, deploy.finished_at)
+            } catch {}
+            return { ok: true, duration }
+          }
+          if (p.status === 'failed' || p.status === 'canceled') {
+            // Encontrar el job que falló
+            let failedJob = null
+            try {
+              const jobsRes = await fetch(
+                `${GITLAB_URL}/api/v4/projects/${gitlabId}/pipelines/${pipelineId}/jobs`,
+                { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN }, signal: AbortSignal.timeout(10000) }
+              )
+              const jobs = await jobsRes.json()
+              const failed = jobs.find(j => j.status === 'failed')
+              if (failed) failedJob = failed.name
+            } catch {}
+            return { ok: false, failedJob, message: `Pipeline CI ${p.status}` }
+          }
         }
       }
     } catch {}
@@ -39,7 +94,7 @@ export async function pollGitlabPipeline(gitlabId, afterTime, maxAttempts = 40, 
     await new Promise(r => setTimeout(r, delayMs))
   }
 
-  return { ok: false, message: 'Timeout esperando pipeline CI (10 min). Revisá GitLab.' }
+  return { ok: false, failedJob: null, message: 'Timeout esperando pipeline CI (10 min). Revisá GitLab.' }
 }
 
 function repoUrlWithAuth(url) {
