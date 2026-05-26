@@ -4,7 +4,7 @@ import { sandboxDelete, sandboxStop, sandboxStatus, sandboxCreateProject } from 
 import { createGitlabRepo, deleteGitlabRepo } from '../lib/gitlab.js'
 import { deleteSessionPod } from '../lib/k8s.js'
 import { pollGitlabPipeline } from '../lib/sandbox-tools.js'
-import { addProjectRoute, removeProjectRoute } from '../lib/projects-router.js'
+import { addProjectRoute, removeProjectRoute, deleteProjectWorkload } from '../lib/projects-router.js'
 
 export const projectsRouter = Router()
 
@@ -269,6 +269,9 @@ projectsRouter.delete('/:id', async (req, res) => {
       console.error(`[projects] removeProjectRoute ${userSlug}/${project.name} falló:`, err.message)
     )
   }
+  deleteProjectWorkload(userSlug, project.name).catch(err =>
+    console.error(`[projects] deleteProjectWorkload ${userSlug}/${project.name} falló:`, err.message)
+  )
   res.json({ ok: true })
 })
 

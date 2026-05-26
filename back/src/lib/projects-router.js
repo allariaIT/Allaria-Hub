@@ -93,3 +93,10 @@ export async function removeProjectRoute(userSlug, name) {
   })
   if (changed) await rollingRestart()
 }
+
+export async function deleteProjectWorkload(userSlug, name) {
+  const { core, apps } = makeClients()
+  const workloadName = serviceNameFor(userSlug, name)
+  await apps.deleteNamespacedDeployment(workloadName, NAMESPACE).catch(() => {})
+  await core.deleteNamespacedService(workloadName, NAMESPACE).catch(() => {})
+}

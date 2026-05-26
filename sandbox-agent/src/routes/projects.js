@@ -153,7 +153,6 @@ projectsRouter.delete('/:user/:name', async (req, res) => {
   }
   await stopContainer(containerName(user, name))
   fs.rmSync(projectDir, { recursive: true, force: true })
-  writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
   res.json({ ok: true })
 })
 
@@ -277,7 +276,6 @@ projectsRouter.post('/:user/:name/build', async (req, res) => {
 projectsRouter.post('/:user/:name/stop', async (req, res) => {
   const { user, name } = req.params
   await stopContainer(containerName(user, name))
-  writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
   res.json({ ok: true })
 })
 

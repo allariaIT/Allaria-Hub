@@ -5,6 +5,7 @@ import {
   sandboxCreateProject, sandboxWriteFile, sandboxReadFile,
   sandboxListFiles, sandboxBuild, sandboxPush, sandboxStatus,
 } from './sandbox-client.js'
+import { addProjectRoute } from './projects-router.js'
 
 const PREVIEW_BASE = process.env.SANDBOX_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz'
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN
@@ -291,6 +292,9 @@ export async function executeSandboxTool(name, args, userId) {
       const ciResult = await pollGitlabPipeline(gitlabId, createStart)
       if (ciResult.ok) {
         await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
+        addProjectRoute(userSlug, args.name).catch(err =>
+          console.error(`[sandbox-tools] addProjectRoute ${userSlug}/${args.name} falló:`, err.message)
+        )
         return {
           message: `Proyecto "${args.title}" creado y deployado exitosamente.`,
           previewUrl,
