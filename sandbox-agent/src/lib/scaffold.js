@@ -123,6 +123,9 @@ p { color: #888; }
 variables:
   IMAGE_NAME: "${userSlug}-${name}"
   SWR_ORGANIZATION: "sandbox-allaria"
+  K8S_APP_PORT: "80"
+  K8S_MANIFEST_PATH: "k8s"
+  K8S_NAMESPACE: "user-projects"
 `)
 
   fs.mkdirSync(path.join(projectDir, 'k8s'), { recursive: true })
