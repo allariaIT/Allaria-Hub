@@ -4,11 +4,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { generateScaffold } from '../lib/scaffold.js'
 import { stopContainer, containerName, getContainerStatus, execInContainer } from '../lib/docker.js'
-import { writeAndReloadNginx } from '../lib/nginx.js'
 import { gitInit, gitCommitAndPush } from '../lib/git.js'
 
 const PROJECTS_DIR = process.env.PROJECTS_DIR || '/projects'
-const NGINX_CONFIG_PATH = process.env.NGINX_CONFIG_PATH || '/etc/nginx/conf.d/sandbox-projects.conf'
 const PREVIEW_URL = process.env.PROJECTS_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz'
 const MAX_CONCURRENT_BUILDS = parseInt(process.env.MAX_CONCURRENT_BUILDS || '3')
 

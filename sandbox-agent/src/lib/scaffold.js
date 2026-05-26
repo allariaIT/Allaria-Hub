@@ -119,6 +119,9 @@ p { color: #888; }
   - project: 'devops/ci-cd-pipelines'
     file: 'templates/k8s-deployment.yml'
     ref: dev-feat-k8s
+
+variables:
+  K8S_APP_PORT: "80"
 `)
 
   fs.mkdirSync(path.join(projectDir, 'k8s'), { recursive: true })
