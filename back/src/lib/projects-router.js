@@ -45,6 +45,7 @@ async function patchConfigMap(updater) {
     NAMESPACE,
     { data: { 'nginx.conf': updated } },
     undefined, undefined, undefined, undefined,
+    undefined,
     { headers: { 'Content-Type': 'application/merge-patch+json' } }
   )
   return true
@@ -65,6 +66,7 @@ async function rollingRestart() {
       },
     },
     undefined, undefined, undefined, undefined,
+    undefined,
     { headers: { 'Content-Type': 'application/merge-patch+json' } }
   )
 }
