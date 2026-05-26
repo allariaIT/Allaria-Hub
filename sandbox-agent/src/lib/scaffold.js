@@ -115,47 +115,14 @@ p { color: #888; }
 `)
 
   fs.writeFileSync(path.join(projectDir, '.gitlab-ci.yml'),
-`stages:
-  - build
-  - deploy
+`include:
+  - project: 'devops/ci-cd-pipelines'
+    file: 'templates/k8s-deployment.yml'
+    ref: dev-feat-k8s
 
 variables:
   IMAGE_NAME: "${userSlug}-${name}"
-  IMAGE_FULL: "\${SWR_REGISTRY}/\${SWR_ORGANIZATION}/${userSlug}-${name}"
   SWR_ORGANIZATION: "sandbox-allaria"
-  DOCKER_TLS_CERTDIR: "/certs"
-  DOCKER_DRIVER: overlay2
-  DOCKER_BUILDKIT: "0"
-
-build:
-  stage: build
-  image: docker:24
-  services:
-    - docker:24-dind
-  before_script:
-    - echo "\${SWR_PASSWORD}" | docker login "\${SWR_REGISTRY}" -u "\${SWR_USERNAME}" --password-stdin
-  script:
-    - docker build --platform linux/amd64 --provenance=false --sbom=false -t "\${IMAGE_FULL}:\${CI_COMMIT_SHORT_SHA}" -t "\${IMAGE_FULL}:latest" .
-    - docker push "\${IMAGE_FULL}:\${CI_COMMIT_SHORT_SHA}"
-    - docker push "\${IMAGE_FULL}:latest"
-  only:
-    - main
-
-deploy:
-  stage: deploy
-  image:
-    name: bitnami/kubectl:latest
-    entrypoint: [""]
-  before_script:
-    - echo "\${KUBE_CONFIG_B64}" | base64 -d > /tmp/kubeconfig
-    - export KUBECONFIG=/tmp/kubeconfig
-  script:
-    - kubectl apply -f k8s/
-    - kubectl set image deployment/${userSlug}-${name} app="\${IMAGE_FULL}:\${CI_COMMIT_SHORT_SHA}" -n user-projects
-    - kubectl rollout status deployment/${userSlug}-${name} -n user-projects --timeout=300s
-  needs: [build]
-  only:
-    - main
 `)
 
   fs.mkdirSync(path.join(projectDir, 'k8s'), { recursive: true })
