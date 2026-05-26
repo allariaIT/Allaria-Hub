@@ -39,7 +39,7 @@ async function patchConfigMap(updater) {
   const res = await core.readNamespacedConfigMap(CONFIGMAP_NAME, NAMESPACE)
   const current = res.body.data['nginx.conf']
   const updated = updater(current)
-  if (updated === current) return
+  if (updated === current) return false
   await core.patchNamespacedConfigMap(
     CONFIGMAP_NAME,
     NAMESPACE,
@@ -47,6 +47,7 @@ async function patchConfigMap(updater) {
     undefined, undefined, undefined, undefined,
     { headers: { 'Content-Type': 'application/merge-patch+json' } }
   )
+  return true
 }
 
 async function rollingRestart() {
@@ -69,23 +70,26 @@ async function rollingRestart() {
 }
 
 export async function addProjectRoute(userSlug, name) {
-  await patchConfigMap(config => {
+  const changed = await patchConfigMap(config => {
     const begin = `# BEGIN PROJECT ${userSlug}/${name}`
     if (config.includes(begin)) return config
     const marker = '# PROJECT ROUTES — managed by hub-back, do not edit manually'
+    if (!config.includes(marker)) throw new Error(`ConfigMap ${CONFIGMAP_NAME} missing marker — was it edited manually?`)
     return config.replace(marker, `${marker}\n${routeBlock(userSlug, name)}`)
   })
-  await rollingRestart()
+  if (changed) await rollingRestart()
 }
 
 export async function removeProjectRoute(userSlug, name) {
-  await patchConfigMap(config => {
+  const changed = await patchConfigMap(config => {
     const begin = `# BEGIN PROJECT ${userSlug}/${name}`
     const end = `# END PROJECT ${userSlug}/${name}`
     const startIdx = config.indexOf(begin)
     const endIdx = config.indexOf(end)
     if (startIdx === -1 || endIdx === -1) return config
-    return config.slice(0, startIdx).trimEnd() + '\n' + config.slice(endIdx + end.length)
+    const head = config.slice(0, startIdx).trimEnd()
+    const tail = config.slice(endIdx + end.length).replace(/^\s*\n/, '\n')
+    return head + tail
   })
-  await rollingRestart()
+  if (changed) await rollingRestart()
 }
