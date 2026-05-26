@@ -4,6 +4,7 @@ import { sandboxDelete, sandboxStop, sandboxStatus, sandboxCreateProject } from 
 import { createGitlabRepo, deleteGitlabRepo } from '../lib/gitlab.js'
 import { deleteSessionPod } from '../lib/k8s.js'
 import { pollGitlabPipeline } from '../lib/sandbox-tools.js'
+import { addProjectRoute, removeProjectRoute } from '../lib/projects-router.js'
 
 export const projectsRouter = Router()
 
@@ -91,6 +92,9 @@ projectsRouter.post('/', async (req, res) => {
       if (ciResult.ok) {
         await prisma.project.update({ where: { id: project.id }, data: { status: 'running' } })
         console.log(`[projects] ${name} build completado → running`)
+        addProjectRoute(userSlug, name).catch(err =>
+          console.error(`[projects] addProjectRoute ${userSlug}/${name} falló:`, err.message)
+        )
       } else {
         await prisma.project.update({ where: { id: project.id }, data: { status: 'error' } }).catch(() => {})
         console.error(`[projects] ${name} build timeout`)
@@ -260,6 +264,9 @@ projectsRouter.delete('/:id', async (req, res) => {
 
   await prisma.session.deleteMany({ where: { projectId: project.id } })
   await prisma.project.delete({ where: { id: project.id } })
+  removeProjectRoute(userSlug, project.name).catch(err =>
+    console.error(`[projects] removeProjectRoute ${userSlug}/${project.name} falló:`, err.message)
+  )
   res.json({ ok: true })
 })
 
