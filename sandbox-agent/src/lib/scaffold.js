@@ -115,16 +115,111 @@ p { color: #888; }
 `)
 
   fs.writeFileSync(path.join(projectDir, '.gitlab-ci.yml'),
-`include:
-  - project: 'devops/ci-cd-pipelines'
-    file: 'templates/docker-deployment.yml'
-    ref: latest
+`stages:
+  - build
+  - deploy
 
 variables:
   IMAGE_NAME: "${userSlug}-${name}"
-  DEPLOY_HOST: "172.30.200.101"
-  DEPLOY_PATH: "/home/allaria/ci-deployments"
-  DEPLOY_APP_NAME: "${userSlug}-${name}"
+  IMAGE_FULL: "\${SWR_REGISTRY}/\${SWR_ORGANIZATION}/${userSlug}-${name}"
   SWR_ORGANIZATION: "sandbox-allaria"
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_DRIVER: overlay2
+  DOCKER_BUILDKIT: "0"
+
+build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  before_script:
+    - echo "\${SWR_PASSWORD}" | docker login "\${SWR_REGISTRY}" -u "\${SWR_USERNAME}" --password-stdin
+  script:
+    - docker build --platform linux/amd64 --provenance=false --sbom=false -t "\${IMAGE_FULL}:\${CI_COMMIT_SHORT_SHA}" -t "\${IMAGE_FULL}:latest" .
+    - docker push "\${IMAGE_FULL}:\${CI_COMMIT_SHORT_SHA}"
+    - docker push "\${IMAGE_FULL}:latest"
+  only:
+    - main
+
+deploy:
+  stage: deploy
+  image:
+    name: bitnami/kubectl:latest
+    entrypoint: [""]
+  before_script:
+    - echo "\${KUBE_CONFIG_B64}" | base64 -d > /tmp/kubeconfig
+    - export KUBECONFIG=/tmp/kubeconfig
+  script:
+    - kubectl apply -f k8s/
+    - kubectl set image deployment/${userSlug}-${name} app="\${IMAGE_FULL}:\${CI_COMMIT_SHORT_SHA}" -n user-projects
+    - kubectl rollout status deployment/${userSlug}-${name} -n user-projects --timeout=300s
+  needs: [build]
+  only:
+    - main
+`)
+
+  fs.mkdirSync(path.join(projectDir, 'k8s'), { recursive: true })
+
+  const imageFull = `swr.la-south-2.myhuaweicloud.com/sandbox-allaria/${userSlug}-${name}`
+
+  fs.writeFileSync(path.join(projectDir, 'k8s', 'deployment.yaml'),
+`apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${userSlug}-${name}
+  namespace: user-projects
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${userSlug}-${name}
+  template:
+    metadata:
+      labels:
+        app: ${userSlug}-${name}
+    spec:
+      imagePullSecrets:
+        - name: swr-pull-secret
+      containers:
+        - name: app
+          image: ${imageFull}:latest
+          ports:
+            - name: http
+              containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "250m"
+              memory: "128Mi"
+`)
+
+  fs.writeFileSync(path.join(projectDir, 'k8s', 'service.yaml'),
+`apiVersion: v1
+kind: Service
+metadata:
+  name: ${userSlug}-${name}
+  namespace: user-projects
+spec:
+  selector:
+    app: ${userSlug}-${name}
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
 `)
 }
