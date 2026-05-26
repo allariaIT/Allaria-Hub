@@ -3,7 +3,7 @@ import { Router } from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
 import { generateScaffold } from '../lib/scaffold.js'
-import { stopContainer, getUsedPorts, findFreePort, releaseReservedPort, containerName, getContainerStatus, execInContainer } from '../lib/docker.js'
+import { stopContainer, containerName, getContainerStatus, execInContainer } from '../lib/docker.js'
 import { writeAndReloadNginx } from '../lib/nginx.js'
 import { gitInit, gitCommitAndPush } from '../lib/git.js'
 
@@ -96,27 +96,20 @@ projectsRouter.post('/', async (req, res) => {
     // 2. Git init
     gitInit(projectDir, repoUrl)
 
-    // 3. Find free port
-    const usedPorts = await getUsedPorts()
-    const port = findFreePort(usedPorts, PORT_START, PORT_END)
-
-    // 4. Save metadata with status: building
-    const meta = { name, title, userSlug, port, repoUrl, status: 'building', createdAt: new Date().toISOString() }
+    // 3. Metadata (sin puerto — deploy en CCE)
+    const PREVIEW_URL = process.env.PROJECTS_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz'
+    const previewUrl = `${PREVIEW_URL}/${userSlug}/${name}/`
+    const meta = { name, title, userSlug, repoUrl, status: 'building', previewUrl, createdAt: new Date().toISOString() }
     const metaPath = path.join(projectDir, '.sandbox-meta.json')
     fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
 
-    // 5. Escribir docker-compose.yml (necesita el puerto)
-    fs.writeFileSync(path.join(projectDir, 'docker-compose.yml'), generateDockerCompose(userSlug, name, port))
-    releaseReservedPort(port)
-
-    // 6. Responder inmediatamente — el CI se encarga del build y deploy
-    res.json({ ok: true, port, status: 'building', previewUrl: `/${userSlug}/${name}/` })
+    // 4. Responder inmediatamente — el CI se encarga del build y deploy
+    res.json({ ok: true, status: 'building', previewUrl })
 
     // 7. Git push + nginx en background (ligero, no bloquea)
     ;(async () => {
       try {
         const result = gitCommitAndPush(projectDir, 'Initial scaffold', meta.repoUrl)
-        await writeAndReloadNginx(NGINX_CONFIG_PATH, getRunningProjects())
         if (result.pushed) {
           console.log(`[sandbox] ${userSlug}/${name} pushed OK → CI pipeline en curso`)
         } else {
@@ -274,7 +267,7 @@ projectsRouter.post('/:user/:name/build', async (req, res) => {
     // Push en background — CI se encarga del build y deploy
     const pushUrl = req.body?.repoUrl || meta.repoUrl
     fs.writeFileSync(metaPath, JSON.stringify({ ...meta, status: 'building' }, null, 2))
-    res.json({ ok: true, port: meta.port, status: 'building' })
+    res.json({ ok: true, status: 'building', previewUrl: meta.previewUrl })
 
     ;(async () => {
       try {
