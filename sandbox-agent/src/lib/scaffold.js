@@ -126,6 +126,7 @@ variables:
   K8S_APP_PORT: "80"
   K8S_MANIFEST_PATH: "k8s"
   K8S_NAMESPACE: "user-projects"
+  K8S_MANIFEST_REPO_URL: ""
 `)
 
   fs.mkdirSync(path.join(projectDir, 'k8s'), { recursive: true })
