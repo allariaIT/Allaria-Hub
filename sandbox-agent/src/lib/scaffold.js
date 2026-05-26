@@ -119,30 +119,6 @@ p { color: #888; }
   - project: 'devops/ci-cd-pipelines'
     file: 'templates/k8s-deployment.yml'
     ref: dev-feat-k8s
-
-variables:
-  IMAGE_NAME: "${userSlug}-${name}"
-  SWR_ORGANIZATION: "sandbox-allaria"
-  K8S_APP_PORT: "80"
-  K8S_MANIFEST_PATH: "k8s"
-  K8S_NAMESPACE: "user-projects"
-  K8S_MANIFEST_REPO_URL: ""
-
-set-image:
-  stage: deploy
-  image:
-    name: bitnami/kubectl:latest
-    entrypoint: [""]
-  before_script:
-    - echo "\${KUBE_CONFIG_B64}" | base64 -d > /tmp/kubeconfig
-    - export KUBECONFIG=/tmp/kubeconfig
-  script:
-    - IMAGE_TAG="prd-\${CI_COMMIT_SHORT_SHA}"
-    - kubectl set image deployment/${userSlug}-${name} app=\${SWR_REGISTRY}/\${SWR_ORGANIZATION}/${userSlug}-${name}:\${IMAGE_TAG} -n user-projects
-    - kubectl rollout status deployment/${userSlug}-${name} -n user-projects --timeout=300s
-  needs: ["Kubernetes Deployment"]
-  rules:
-    - if: '\$CI_COMMIT_BRANCH == "main"'
 `)
 
   fs.mkdirSync(path.join(projectDir, 'k8s'), { recursive: true })
