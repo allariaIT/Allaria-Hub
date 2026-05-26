@@ -264,9 +264,11 @@ projectsRouter.delete('/:id', async (req, res) => {
 
   await prisma.session.deleteMany({ where: { projectId: project.id } })
   await prisma.project.delete({ where: { id: project.id } })
-  removeProjectRoute(userSlug, project.name).catch(err =>
-    console.error(`[projects] removeProjectRoute ${userSlug}/${project.name} falló:`, err.message)
-  )
+  if (project.status === 'running') {
+    removeProjectRoute(userSlug, project.name).catch(err =>
+      console.error(`[projects] removeProjectRoute ${userSlug}/${project.name} falló:`, err.message)
+    )
+  }
   res.json({ ok: true })
 })
 
