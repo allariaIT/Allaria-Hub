@@ -7,27 +7,9 @@ import { stopContainer, containerName, getContainerStatus, execInContainer } fro
 import { writeAndReloadNginx } from '../lib/nginx.js'
 import { gitInit, gitCommitAndPush } from '../lib/git.js'
 
-function generateDockerCompose(userSlug, name, port) {
-  return `services:
-  app:
-    image: \${IMAGE_REF}
-    container_name: sandbox-${userSlug}-${name}
-    restart: unless-stopped
-    ports:
-      - "${port}:80"
-    networks:
-      - red-docker
-
-networks:
-  red-docker:
-    external: true
-`
-}
-
 const PROJECTS_DIR = process.env.PROJECTS_DIR || '/projects'
 const NGINX_CONFIG_PATH = process.env.NGINX_CONFIG_PATH || '/etc/nginx/conf.d/sandbox-projects.conf'
-const PORT_START = parseInt(process.env.PORT_RANGE_START || '4001')
-const PORT_END = parseInt(process.env.PORT_RANGE_END || '4100')
+const PREVIEW_URL = process.env.PROJECTS_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz'
 const MAX_CONCURRENT_BUILDS = parseInt(process.env.MAX_CONCURRENT_BUILDS || '3')
 
 // Semáforo para limitar builds concurrentes
@@ -97,7 +79,6 @@ projectsRouter.post('/', async (req, res) => {
     gitInit(projectDir, repoUrl)
 
     // 3. Metadata (sin puerto — deploy en CCE)
-    const PREVIEW_URL = process.env.PROJECTS_PREVIEW_URL || 'https://proyectos-sandbox.allaria.xyz'
     const previewUrl = `${PREVIEW_URL}/${userSlug}/${name}/`
     const meta = { name, title, userSlug, repoUrl, status: 'building', previewUrl, createdAt: new Date().toISOString() }
     const metaPath = path.join(projectDir, '.sandbox-meta.json')
@@ -106,7 +87,7 @@ projectsRouter.post('/', async (req, res) => {
     // 4. Responder inmediatamente — el CI se encarga del build y deploy
     res.json({ ok: true, status: 'building', previewUrl })
 
-    // 7. Git push + nginx en background (ligero, no bloquea)
+    // 5. Git push en background (ligero, no bloquea)
     ;(async () => {
       try {
         const result = gitCommitAndPush(projectDir, 'Initial scaffold', meta.repoUrl)
