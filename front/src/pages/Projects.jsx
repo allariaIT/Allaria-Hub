@@ -369,8 +369,18 @@ export default function Projects() {
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   required
                   pattern="[a-z0-9][-a-z0-9]*[a-z0-9]|[a-z0-9]"
+                  maxLength={40}
                 />
-                <span className="modal-hint">Solo letras minúsculas, números y guiones</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="modal-hint">Solo letras minúsculas, números y guiones</span>
+                  <span style={{
+                    fontSize: '11px',
+                    color: form.name.length > 35 ? '#f59e0b' : '#666',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {form.name.length}/40
+                  </span>
+                </div>
               </label>
               <label>
                 <span>Descripción (opcional)</span>
