@@ -60,10 +60,9 @@ export default function Layout() {
           {user && (
             <div className="sidebar-user">
               <img
-                src={user.picture}
-                alt={user.name}
+                src="/assets/apple-icon.png"
+                alt="Allaria"
                 className="sidebar-user-avatar"
-                referrerPolicy="no-referrer"
               />
               <div className="sidebar-user-info">
                 <span className="sidebar-user-name">{user.name}</span>
