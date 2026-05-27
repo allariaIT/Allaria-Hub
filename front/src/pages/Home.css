@@ -47,10 +47,7 @@
 }
 
 .hero-highlight {
-  background: linear-gradient(135deg, var(--allaria-navy) 0%, var(--allaria-navy-light) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--allaria-navy);
 }
 
 .hero-subtitle {
