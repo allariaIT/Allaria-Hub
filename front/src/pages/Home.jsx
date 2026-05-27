@@ -48,7 +48,7 @@ export default function Home() {
         </div>
         <div className="hero-visual">
           <div className="hero-logo-container">
-            <img src="/assets/Logo.jpg" alt="Allaria" className="hero-logo" />
+            <img src="/assets/logo.png" alt="Allaria" className="hero-logo" />
             <div className="hero-logo-ring" />
             <div className="hero-logo-ring ring-2" />
           </div>

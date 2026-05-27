@@ -32,7 +32,7 @@ export default function Layout() {
       <aside className={`app-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-brand">
-            <img src="/assets/apple-icon.png" alt="Allaria" className="sidebar-logo" />
+            <img src="/assets/logo.png" alt="Allaria" className="sidebar-logo" />
             <div className="sidebar-brand-text">
               <h1>Allaria Hub</h1>
               <span>IA Corporate Platform</span>
@@ -60,7 +60,7 @@ export default function Layout() {
           {user && (
             <div className="sidebar-user">
               <img
-                src="/assets/apple-icon.png"
+                src="/assets/logo.png"
                 alt="Allaria"
                 className="sidebar-user-avatar"
               />

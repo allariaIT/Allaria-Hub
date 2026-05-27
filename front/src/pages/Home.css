@@ -82,10 +82,9 @@
 }
 
 .hero-logo {
-  width: 100px;
-  height: 100px;
+  width: 120px;
+  height: 120px;
   object-fit: contain;
-  border-radius: var(--radius-md);
   position: relative;
   z-index: 2;
 }

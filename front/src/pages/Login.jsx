@@ -47,7 +47,7 @@ export default function Login() {
         <div className="login-bg-pattern" />
       </div>
       <div className="login-card">
-        <img src="/assets/apple-icon.png" alt="Allaria" className="login-logo" />
+        <img src="/assets/logo.png" alt="Allaria" className="login-logo" />
         <h1 className="login-title">Allaria Hub IA</h1>
         <p className="login-subtitle">IA Corporate Platform</p>
         <p className="login-desc">

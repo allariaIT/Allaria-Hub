@@ -46,9 +46,9 @@
 }
 
 .login-logo {
-  width: 64px;
-  height: 64px;
-  border-radius: var(--radius-md);
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
   margin-bottom: 20px;
 }
 
