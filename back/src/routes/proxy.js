@@ -85,7 +85,19 @@ async function callLiteLLM(body) {
   })
   const data = await response.json()
   if (data.error) {
-    throw new Error(data.error.message || JSON.stringify(data.error))
+    const raw = data.error.message || JSON.stringify(data.error)
+    // Traducir errores técnicos de LLM a mensajes amigables
+    if (/Unsupported MIME type/i.test(raw)) {
+      const mime = raw.match(/Unsupported MIME type:\s*([^\s"]+)/)?.[1] || 'desconocido'
+      throw new Error(`El archivo adjunto tiene un formato no soportado (${mime}). Para Excel usá CSV, para Word copiá el texto directamente.`)
+    }
+    if (/media_type.*Input should be.*image/i.test(raw) || /image.*source.*base64.*media_type/i.test(raw)) {
+      throw new Error('El archivo adjunto no es una imagen compatible. Solo se admiten JPEG, PNG, GIF y WebP. Para PDFs usá Gemini.')
+    }
+    if (/context.*window|token.*count.*exceeds/i.test(raw)) {
+      throw new Error('El archivo es demasiado grande para procesarlo. Intentá con un archivo más chico o copiá solo la parte relevante.')
+    }
+    throw new Error(raw)
   }
   return data
 }

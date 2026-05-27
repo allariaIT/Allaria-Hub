@@ -241,7 +241,26 @@ export default function Chat() {
       showToast('📎 Se cambió a Gemini — es el mejor modelo para analizar archivos adjuntos')
     }
 
-    files.forEach(file => {
+    // Tipos de archivo no soportados inline por ningún LLM
+    const UNSUPPORTED_TYPES = [
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ]
+    const UNSUPPORTED_EXT = /\.(doc|docx|xls|xlsx|ppt|pptx)$/i
+
+    const unsupported = files.filter(f => UNSUPPORTED_TYPES.includes(f.type) || UNSUPPORTED_EXT.test(f.name))
+    if (unsupported.length > 0) {
+      const names = unsupported.map(f => f.name).join(', ')
+      showToast(`❌ Formato no soportado: ${names}. Para Excel exportá como CSV; para Word copiá el texto directamente.`)
+    }
+
+    const supported = files.filter(f => !UNSUPPORTED_TYPES.includes(f.type) && !UNSUPPORTED_EXT.test(f.name))
+
+    supported.forEach(file => {
       const isImage = file.type.startsWith('image/')
       const isText = /^text\/|json|javascript|typescript|css|html|xml|csv|markdown|yaml/.test(file.type)
         || /\.(txt|md|py|js|ts|jsx|tsx|css|html|json|csv|yaml|yml|sh|sql|env)$/i.test(file.name)
@@ -718,7 +737,7 @@ export default function Chat() {
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*,audio/*,video/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css,.doc,.docx,.xls,.xlsx"
+              accept="image/*,audio/*,video/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css"
               onChange={handleFileSelect}
               style={{ display: 'none' }}
             />
