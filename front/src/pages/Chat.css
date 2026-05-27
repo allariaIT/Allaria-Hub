@@ -409,12 +409,12 @@
 }
 
 .chat-message.assistant .msg-avatar {
-  background: rgba(11, 61, 122, 0.08);
+  background: rgba(0, 51, 102, 0.08);
   color: var(--allaria-navy);
 }
 
 .chat-message.user .msg-avatar {
-  background: rgba(182, 154, 91, 0.12);
+  background: rgba(139, 115, 75, 0.12);
   color: var(--allaria-gold-dark);
 }
 
@@ -602,7 +602,7 @@
 
 .chat-attach-btn:hover:not(:disabled) {
   color: var(--allaria-navy);
-  background: rgba(11, 61, 122, 0.06);
+  background: rgba(0, 51, 102, 0.06);
 }
 
 .chat-attach-btn:disabled {
@@ -807,7 +807,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: linear-gradient(135deg, rgba(182, 154, 91, 0.06), transparent);
+  background: linear-gradient(135deg, rgba(139, 115, 75, 0.06), transparent);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;

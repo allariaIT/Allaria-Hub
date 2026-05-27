@@ -213,7 +213,7 @@
 .connector-btn-connect:hover {
   background: var(--allaria-navy-deep);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(11, 61, 122, 0.25);
+  box-shadow: 0 2px 8px rgba(0, 51, 102, 0.25);
 }
 
 .connector-btn-disconnect {

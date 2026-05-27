@@ -1,11 +1,11 @@
 :root {
   /* Allaria Brand Colors */
-  --allaria-navy: #0B3D7A;
-  --allaria-navy-deep: #072B57;
-  --allaria-navy-light: #1A5DAA;
-  --allaria-gold: #B69A5B;
-  --allaria-gold-light: #D4BC82;
-  --allaria-gold-dark: #8B7640;
+  --allaria-navy: #003366;
+  --allaria-navy-deep: #002244;
+  --allaria-navy-light: #004B99;
+  --allaria-gold: #8B734B;
+  --allaria-gold-light: #B09268;
+  --allaria-gold-dark: #6B5532;
 
   /* Neutrals */
   --bg-primary: #F7F8FA;
@@ -15,7 +15,7 @@
   --bg-dark-secondary: #111827;
   --bg-dark-tertiary: #1A2235;
 
-  --text-primary: #0F172A;
+  --text-primary: #1D1D1B;
   --text-secondary: #475569;
   --text-tertiary: #94A3B8;
   --text-on-dark: #F1F5F9;
@@ -31,14 +31,14 @@
   --info: #3B82F6;
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(11, 61, 122, 0.04);
-  --shadow-md: 0 4px 12px rgba(11, 61, 122, 0.08);
-  --shadow-lg: 0 12px 32px rgba(11, 61, 122, 0.12);
-  --shadow-xl: 0 24px 48px rgba(11, 61, 122, 0.16);
+  --shadow-sm: 0 1px 2px rgba(0, 51, 102, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 51, 102, 0.08);
+  --shadow-lg: 0 12px 32px rgba(0, 51, 102, 0.12);
+  --shadow-xl: 0 24px 48px rgba(0, 51, 102, 0.16);
 
   /* Typography */
-  --font-display: 'Playfair Display', Georgia, serif;
-  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Open Sans', sans-serif;
+  --font-body: 'Open Sans', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
   /* Spacing */

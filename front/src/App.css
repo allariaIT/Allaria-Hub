@@ -136,8 +136,8 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: rgba(182, 154, 91, 0.1);
-  border: 1px solid rgba(182, 154, 91, 0.2);
+  background: rgba(139, 115, 75, 0.1);
+  border: 1px solid rgba(139, 115, 75, 0.2);
   border-radius: var(--radius-sm);
   font-size: 12px;
   color: var(--allaria-gold-light);
@@ -343,7 +343,7 @@
 }
 
 .btn-gold:hover {
-  box-shadow: 0 4px 16px rgba(182, 154, 91, 0.35);
+  box-shadow: 0 4px 16px rgba(139, 115, 75, 0.35);
 }
 
 .btn-outline {
@@ -355,7 +355,7 @@
 .btn-outline:hover {
   border-color: var(--allaria-navy);
   color: var(--allaria-navy);
-  background: rgba(11, 61, 122, 0.03);
+  background: rgba(0, 51, 102, 0.03);
 }
 
 .btn-sm {
@@ -388,12 +388,12 @@
 }
 
 .tag-navy {
-  background: rgba(11, 61, 122, 0.08);
+  background: rgba(0, 51, 102, 0.08);
   color: var(--allaria-navy);
 }
 
 .tag-gold {
-  background: rgba(182, 154, 91, 0.12);
+  background: rgba(139, 115, 75, 0.12);
   color: var(--allaria-gold-dark);
 }
 
@@ -419,8 +419,8 @@
     -45deg,
     transparent,
     transparent 6px,
-    rgba(182, 154, 91, 0.06) 6px,
-    rgba(182, 154, 91, 0.06) 8px
+    rgba(139, 115, 75, 0.06) 6px,
+    rgba(139, 115, 75, 0.06) 8px
   );
   pointer-events: none;
 }

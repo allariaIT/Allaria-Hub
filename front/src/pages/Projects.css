@@ -359,7 +359,7 @@
   transition: all var(--transition-fast);
 }
 
-.project-card:hover .project-open { background: rgba(11,61,122,0.06); color: var(--allaria-navy); }
+.project-card:hover .project-open { background: rgba(0,51,102,0.06); color: var(--allaria-navy); }
 
 .project-desc {
   font-size: 14px;
