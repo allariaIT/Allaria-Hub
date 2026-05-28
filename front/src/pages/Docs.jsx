@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { ChevronRight, Clock, Search, BookMarked } from 'lucide-react'
+import { ChevronRight, Clock, Search, BookMarked, ArrowLeft } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import { docSections } from '../data/mockData'
 import './Docs.css'
 
 export default function Docs() {
   const [search, setSearch] = useState('')
   const [expandedSection, setExpandedSection] = useState('getting-started')
+  const [selectedArticle, setSelectedArticle] = useState(null)
 
   const filtered = search.trim()
     ? docSections.map(s => ({
@@ -15,6 +17,19 @@ export default function Docs() {
         ),
       })).filter(s => s.articles.length > 0)
     : docSections
+
+  function handleArticleClick(article, section) {
+    setSelectedArticle({ ...article, sectionTitle: section.title })
+  }
+
+  function handleBack() {
+    setSelectedArticle(null)
+  }
+
+  function handleSectionClick(sectionId) {
+    setExpandedSection(sectionId)
+    setSelectedArticle(null)
+  }
 
   return (
     <>
@@ -26,20 +41,21 @@ export default function Docs() {
           </div>
         </div>
 
-        <div className="docs-search-bar">
-          <Search size={16} />
-          <input
-            type="text"
-            placeholder="Buscar en la documentación..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+        {!selectedArticle && (
+          <div className="docs-search-bar">
+            <Search size={16} />
+            <input
+              type="text"
+              placeholder="Buscar en la documentación..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        )}
       </div>
 
       <div className="page-content">
         <div className="docs-layout">
-          {/* Sidebar nav */}
           <aside className="docs-sidebar">
             <div className="docs-sidebar-title">
               <BookMarked size={16} />
@@ -49,7 +65,7 @@ export default function Docs() {
               <button
                 key={section.id}
                 className={`docs-nav-item ${expandedSection === section.id ? 'active' : ''}`}
-                onClick={() => setExpandedSection(section.id)}
+                onClick={() => handleSectionClick(section.id)}
               >
                 <span className="docs-nav-icon">{section.icon}</span>
                 {section.title}
@@ -58,9 +74,25 @@ export default function Docs() {
             ))}
           </aside>
 
-          {/* Main content */}
           <div className="docs-main">
-            {filtered.length === 0 ? (
+            {selectedArticle ? (
+              <div className="docs-article-view">
+                <button className="docs-back-btn" onClick={handleBack}>
+                  <ArrowLeft size={15} />
+                  Volver a {selectedArticle.sectionTitle}
+                </button>
+                <div className="docs-article-header">
+                  <h2>{selectedArticle.title}</h2>
+                  <span className="docs-article-time">
+                    <Clock size={12} />
+                    {selectedArticle.readTime}
+                  </span>
+                </div>
+                <div className="docs-article-body">
+                  <ReactMarkdown>{selectedArticle.content}</ReactMarkdown>
+                </div>
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="empty-state">
                 <Search size={40} />
                 <h3>Sin resultados</h3>
@@ -84,6 +116,7 @@ export default function Docs() {
                         key={i}
                         className="docs-article"
                         style={{ animationDelay: `${i * 50}ms` }}
+                        onClick={() => handleArticleClick(article, section)}
                       >
                         <div className="docs-article-info">
                           <h4>{article.title}</h4>

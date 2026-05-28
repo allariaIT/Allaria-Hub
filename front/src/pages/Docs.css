@@ -188,6 +188,123 @@
   transform: translateX(4px);
 }
 
+/* Article view */
+.docs-article-view {
+  animation: slideUp 0.2s ease both;
+}
+
+.docs-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 6px 0;
+  margin-bottom: 20px;
+  transition: color var(--transition-fast);
+}
+
+.docs-back-btn:hover {
+  color: var(--allaria-navy);
+}
+
+.docs-article-header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--allaria-navy);
+}
+
+.docs-article-header h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.docs-article-body {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.75;
+  max-width: 680px;
+}
+
+.docs-article-body h2 {
+  display: none;
+}
+
+.docs-article-body h3 {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 28px 0 10px;
+}
+
+.docs-article-body p {
+  margin: 0 0 14px;
+}
+
+.docs-article-body ul,
+.docs-article-body ol {
+  margin: 0 0 14px;
+  padding-left: 22px;
+}
+
+.docs-article-body li {
+  margin-bottom: 6px;
+}
+
+.docs-article-body strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.docs-article-body em {
+  font-style: italic;
+  color: var(--text-tertiary);
+}
+
+.docs-article-body code {
+  font-family: 'Fira Code', 'Fira Mono', monospace;
+  font-size: 13px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--allaria-navy);
+}
+
+.docs-article-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0 20px;
+  font-size: 14px;
+}
+
+.docs-article-body th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  padding: 10px 14px;
+  border: 1px solid var(--border-light);
+}
+
+.docs-article-body td {
+  padding: 10px 14px;
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+}
+
+.docs-article-body tr:hover td {
+  background: var(--bg-secondary);
+}
+
 @media (max-width: 768px) {
   .docs-layout {
     grid-template-columns: 1fr;
