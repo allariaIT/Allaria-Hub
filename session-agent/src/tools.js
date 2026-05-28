@@ -30,11 +30,13 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: 'Lee el contenido de un archivo del proyecto.',
+      description: 'Lee el contenido de un archivo. Para archivos grandes usa offset para leer por partes (ej: offset=150 para ver desde la línea 150).',
       parameters: {
         type: 'object',
         properties: {
           path: { type: 'string', description: 'Path relativo desde la raíz del proyecto (ej: "src/App.jsx")' },
+          offset: { type: 'number', description: 'Línea desde la que empezar (default: 0). Usá esto para leer la segunda mitad de archivos grandes.' },
+          limit: { type: 'number', description: 'Cantidad de líneas a leer (default: 150, max: 200).' },
         },
         required: ['path'],
       },
@@ -100,16 +102,22 @@ export async function executeTool(name, input) {
       if (!fs.existsSync(resolved)) return { error: `Archivo no encontrado: ${input.path}` }
       const content = fs.readFileSync(resolved, 'utf-8')
       const lines = content.split('\n')
-      const MAX_LINES = 150
-      if (lines.length > MAX_LINES) {
-        return {
-          content: lines.slice(0, MAX_LINES).join('\n'),
-          truncated: true,
-          totalLines: lines.length,
-          note: `Mostrando líneas 1-${MAX_LINES} de ${lines.length}. Si necesitás más, pedí un rango específico.`,
-        }
+      const offset = Math.max(0, Math.floor(input.offset) || 0)
+      const limit = Math.min(200, Math.max(1, Math.floor(input.limit) || 150))
+      const slice = lines.slice(offset, offset + limit)
+      const result = {
+        content: slice.join('\n'),
+        totalLines: lines.length,
       }
-      return { content }
+      if (offset > 0 || offset + limit < lines.length) {
+        result.showing = `líneas ${offset + 1}–${Math.min(offset + limit, lines.length)} de ${lines.length}`
+      }
+      if (offset + limit < lines.length) {
+        result.hasMore = true
+        result.nextOffset = offset + limit
+        result.hint = `Hay más contenido. Llamá read_file con offset=${offset + limit} para continuar.`
+      }
+      return result
     }
 
     case 'write_file': {

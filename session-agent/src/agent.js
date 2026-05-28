@@ -1,7 +1,9 @@
 import { toolDefinitions, executeTool } from './tools.js'
 
 const MODEL = 'claude-sonnet-4-5'
-const MAX_ROUNDS = 20
+const MAX_ROUNDS = 30
+const MAX_AUTO_CONTINUE = 3
+const LITELLM_TIMEOUT_MS = 3 * 60_000 // 3 min por llamada — si LiteLLM no responde, cortar
 
 // Mantiene solo las últimas N rondas de tool calls para no explotar el contexto
 function pruneToolRounds(messages, maxRounds = 6) {
@@ -30,6 +32,7 @@ async function callLiteLLM(messages) {
       messages,
       tools: toolDefinitions,
     }),
+    signal: AbortSignal.timeout(LITELLM_TIMEOUT_MS),
   })
   if (!res.ok) {
     const err = await res.text()
@@ -49,6 +52,7 @@ export async function* runAgent(userMessage, history, systemPrompt) {
   ]
 
   let rounds = 0
+  let autoContinues = 0
 
   while (rounds < MAX_ROUNDS) {
     const data = await callLiteLLM(pruneToolRounds(messages))
@@ -62,7 +66,26 @@ export async function* runAgent(userMessage, history, systemPrompt) {
     }
 
     const reason = choice.finish_reason
-    if (reason === 'stop' || reason === 'end_turn') break
+
+    if (reason === 'stop' || reason === 'end_turn') {
+      // Detectar si el modelo escribió archivos pero olvidó hacer git_push
+      const hasWrite = messages.some(m =>
+        m.role === 'assistant' && m.tool_calls?.some(tc => tc.function.name === 'write_file')
+      )
+      const hasPushed = messages.some(m =>
+        m.role === 'assistant' && m.tool_calls?.some(tc => tc.function.name === 'git_push')
+      )
+      if (hasWrite && !hasPushed && autoContinues < MAX_AUTO_CONTINUE) {
+        // Auto-continuar: el modelo hizo cambios pero no los pusheó
+        autoContinues++
+        console.log(`[agent] auto-continue ${autoContinues}/${MAX_AUTO_CONTINUE}: write sin push detectado`)
+        if (msg.content) messages.push({ role: 'assistant', content: msg.content })
+        messages.push({ role: 'user', content: 'Los cambios están escritos pero falta hacer git_push. Hacelo ahora para terminar.' })
+        continue
+      }
+      break
+    }
+
     if (reason === 'length') {
       yield { type: 'error', message: 'Respuesta truncada por límite de tokens. Podés pedirme que continúe.' }
       break
@@ -101,5 +124,9 @@ export async function* runAgent(userMessage, history, systemPrompt) {
     }
 
     break
+  }
+
+  if (rounds >= MAX_ROUNDS) {
+    yield { type: 'text', content: '\n\n⚠️ Alcancé el límite de pasos. Si la tarea no terminó, decime "continúa" para seguir.' }
   }
 }
