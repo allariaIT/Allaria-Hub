@@ -102,6 +102,36 @@ async function rollingRestart() {
   )
 }
 
+export async function getRouterConfig() {
+  const { core } = makeClients()
+  const res = await core.readNamespacedConfigMap(CONFIGMAP_NAME, NAMESPACE)
+  return res.body.data['nginx.conf']
+}
+
+export async function syncProjectRoutes(entries) {
+  const resolved = (await Promise.all(
+    entries.map(async ({ userSlug, name }) => {
+      const svc = await resolveServiceName(userSlug, name)
+      return svc ? { userSlug, name, svc } : null
+    })
+  )).filter(Boolean)
+
+  if (resolved.length === 0) return
+
+  const changed = await patchConfigMap(config => {
+    const marker = '# PROJECT ROUTES — managed by hub-back, do not edit manually'
+    if (!config.includes(marker)) throw new Error(`ConfigMap ${CONFIGMAP_NAME} missing marker`)
+    let result = config
+    for (const { userSlug, name, svc } of resolved) {
+      if (result.includes(`# BEGIN PROJECT ${userSlug}/${name}`)) continue
+      result = result.replace(marker, `${marker}\n${routeBlock(userSlug, name, svc)}`)
+    }
+    return result
+  })
+
+  if (changed) await rollingRestart()
+}
+
 export async function addProjectRoute(userSlug, name) {
   const svc = await resolveServiceName(userSlug, name)
   if (!svc) {

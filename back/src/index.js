@@ -10,6 +10,7 @@ import { sessionsRouter } from './routes/sessions.js'
 import { prisma } from './lib/prisma.js'
 import { sandboxStatus } from './lib/sandbox-client.js'
 import { deleteSessionPod } from './lib/k8s.js'
+import { getRouterConfig, syncProjectRoutes } from './lib/projects-router.js'
 
 const app = express()
 const PORT = process.env.PORT || 3098
@@ -144,6 +145,25 @@ async function reconcileProjects() {
       } catch (err) {
         console.warn(`[reconcile] error limpiando sesión ${session.id}:`, err.message)
       }
+    }
+
+    // Pass 4: rutas CCE — detectar proyectos 'running' sin entrada en el nginx router
+    try {
+      const cceProjects = await prisma.project.findMany({
+        where: { status: 'running', previewUrl: { contains: 'proyectos-sandbox.allaria.xyz' } },
+        include: { user: { select: { email: true } } },
+      })
+      const nginxConf = await getRouterConfig()
+      const missing = cceProjects
+        .map(p => ({ userSlug: slugFromEmail(p.user.email), name: p.name }))
+        .filter(({ userSlug, name }) => !nginxConf.includes(`# BEGIN PROJECT ${userSlug}/${name}`))
+      if (missing.length > 0) {
+        console.log(`[reconcile] ${missing.length} proyecto(s) sin ruta CCE — sincronizando: ${missing.map(m => `${m.userSlug}/${m.name}`).join(', ')}`)
+        await syncProjectRoutes(missing)
+        console.log('[reconcile] rutas CCE sincronizadas')
+      }
+    } catch (err) {
+      console.log(`[reconcile] route sync skipped: ${err.message}`)
     }
   } catch (err) {
     console.error('[reconcile] Error:', err.message)
