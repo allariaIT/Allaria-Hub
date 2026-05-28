@@ -76,6 +76,11 @@ export default function ProjectWorkspace() {
   const [editingDesc, setEditingDesc]   = useState(false)
   const [titleDraft, setTitleDraft]     = useState('')
   const [descDraft, setDescDraft]       = useState('')
+  const [savingTitle, setSavingTitle]   = useState(false)
+  const [savingDesc, setSavingDesc]     = useState(false)
+  const [titleError, setTitleError]     = useState('')
+  const [descError, setDescError]       = useState('')
+  const [descSaved, setDescSaved]       = useState(false)
 
   const [input, setInput]               = useState('')
   const [selectedModel] = useState(DEFAULT_MODEL)
@@ -388,19 +393,33 @@ export default function ProjectWorkspace() {
   // ─────────────────────────────────────────────────────────────────────────
   const saveTitle = async () => {
     if (!titleDraft.trim()) return
+    setSavingTitle(true)
+    setTitleError('')
     try {
       const updated = await api.updateProject(id, { title: titleDraft.trim() })
       setProject(updated)
-    } catch {}
-    setEditingTitle(false)
+      setEditingTitle(false)
+    } catch (err) {
+      setTitleError(err.message || 'Error al guardar')
+    } finally {
+      setSavingTitle(false)
+    }
   }
 
   const saveDesc = async () => {
+    setSavingDesc(true)
+    setDescError('')
     try {
       const updated = await api.updateProject(id, { description: descDraft })
       setProject(updated)
-    } catch {}
-    setEditingDesc(false)
+      setEditingDesc(false)
+      setDescSaved(true)
+      setTimeout(() => setDescSaved(false), 2000)
+    } catch (err) {
+      setDescError(err.message || 'Error al guardar')
+    } finally {
+      setSavingDesc(false)
+    }
   }
 
   const handlePublishToggle = async () => {
@@ -521,12 +540,15 @@ export default function ProjectWorkspace() {
             <div className="pw-inline-edit">
               <input
                 value={titleDraft}
-                onChange={e => setTitleDraft(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false) }}
+                onChange={e => { setTitleDraft(e.target.value); setTitleError('') }}
+                onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setEditingTitle(false); setTitleError('') } }}
                 autoFocus
               />
-              <button onClick={saveTitle}><Check size={14} /></button>
-              <button onClick={() => setEditingTitle(false)}><X size={14} /></button>
+              <button onClick={saveTitle} disabled={savingTitle}>
+                {savingTitle ? <Loader2 size={14} className="spin-icon" /> : <Check size={14} />}
+              </button>
+              <button onClick={() => { setEditingTitle(false); setTitleError('') }}><X size={14} /></button>
+              {titleError && <span className="pw-title-error">{titleError}</span>}
             </div>
           ) : (
             <span className="pw-title-text" onClick={() => setEditingTitle(true)}>
@@ -559,16 +581,25 @@ export default function ProjectWorkspace() {
             <h4>Descripción</h4>
             {editingDesc ? (
               <div className="pw-desc-edit">
-                <textarea value={descDraft} onChange={e => setDescDraft(e.target.value)} rows={4} autoFocus />
+                <textarea value={descDraft} onChange={e => setDescDraft(e.target.value)} rows={4} autoFocus
+                  onKeyDown={e => { if (e.key === 'Escape') { setEditingDesc(false); setDescError('') } }}
+                />
+                {descError && <p className="pw-save-error">{descError}</p>}
                 <div className="pw-desc-edit-actions">
-                  <button className="btn-sm" onClick={saveDesc}><Check size={12} /> Guardar</button>
-                  <button className="btn-sm ghost" onClick={() => setEditingDesc(false)}>Cancelar</button>
+                  <button className="btn-sm" onClick={saveDesc} disabled={savingDesc}>
+                    {savingDesc ? <Loader2 size={12} className="spin-icon" /> : <Check size={12} />}
+                    {savingDesc ? 'Guardando...' : 'Guardar'}
+                  </button>
+                  <button className="btn-sm ghost" onClick={() => { setEditingDesc(false); setDescError('') }}>Cancelar</button>
                 </div>
               </div>
             ) : (
-              <p className="pw-desc-text" onClick={() => setEditingDesc(true)}>
-                {project.description || <span className="pw-desc-empty">+ Agregar descripción</span>}
-                <Pencil size={11} className="pw-edit-icon" />
+              <p className="pw-desc-text" onClick={() => { setEditingDesc(true); setDescSaved(false) }}>
+                {descSaved
+                  ? <span className="pw-saved-badge"><Check size={11} /> Guardado</span>
+                  : (project.description || <span className="pw-desc-empty">+ Agregar descripción</span>)
+                }
+                {!descSaved && <Pencil size={11} className="pw-edit-icon" />}
               </p>
             )}
           </div>

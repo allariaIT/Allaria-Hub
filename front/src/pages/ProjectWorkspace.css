@@ -985,3 +985,24 @@
 @media (max-width: 768px) {
   .pw-pipeline { margin-left: 0; max-width: 100%; }
 }
+
+.pw-save-error {
+  font-size: 11px;
+  color: #ef4444;
+  margin-top: 4px;
+}
+
+.pw-title-error {
+  font-size: 11px;
+  color: #ef4444;
+  white-space: nowrap;
+}
+
+.pw-saved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #22c55e;
+  font-size: 12px;
+  font-weight: 600;
+}
