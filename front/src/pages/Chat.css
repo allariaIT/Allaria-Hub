@@ -895,7 +895,7 @@
 }
 
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 600px) {
   .chat-sidebar {
     left: 0;
     width: 100%;

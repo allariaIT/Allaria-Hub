@@ -6,14 +6,17 @@
 
 .app-sidebar {
   width: var(--sidebar-width);
+  flex-shrink: 0;
   background: var(--bg-dark);
   color: var(--text-on-dark);
   display: flex;
   flex-direction: column;
-  position: fixed;
+  /* En el flujo (flex): la sidebar ocupa su columna y nunca se superpone al contenido.
+     Sticky + 100vh la mantiene fija visualmente al hacer scroll. */
+  position: sticky;
   top: 0;
-  left: 0;
-  bottom: 0;
+  align-self: flex-start;
+  height: 100vh;
   z-index: 100;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   transition: transform var(--transition-base);
@@ -21,7 +24,7 @@
 
 .app-main {
   flex: 1;
-  margin-left: var(--sidebar-width);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -241,12 +244,19 @@
   display: none;
 }
 
-@media (max-width: 768px) {
+/* Solo en pantallas realmente angostas (teléfonos) la sidebar pasa a ser un
+   drawer superpuesto. Por encima de esto se mantiene lado a lado con el contenido. */
+@media (max-width: 600px) {
   .mobile-menu-btn {
     display: flex;
   }
 
   .app-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
     transform: translateX(-100%);
   }
 
@@ -268,10 +278,6 @@
   .sidebar-overlay.visible {
     opacity: 1;
     pointer-events: all;
-  }
-
-  .app-main {
-    margin-left: 0;
   }
 }
 
