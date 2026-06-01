@@ -111,18 +111,11 @@ export async function getRouterConfig() {
 export async function syncProjectRoutes(entries) {
   const resolved = (await Promise.all(
     entries.map(async ({ userSlug, name }) => {
-      try {
-        const svc = await resolveServiceName(userSlug, name)
-        if (!svc) console.log(`[syncProjectRoutes] no service for ${userSlug}/${name}`)
-        return svc ? { userSlug, name, svc } : null
-      } catch (err) {
-        console.log(`[syncProjectRoutes] resolveServiceName error ${userSlug}/${name}: ${err.message}`)
-        return null
-      }
+      const svc = await resolveServiceName(userSlug, name)
+      return svc ? { userSlug, name, svc } : null
     })
   )).filter(Boolean)
 
-  console.log(`[syncProjectRoutes] resolved ${resolved.length}/${entries.length} entries`)
   if (resolved.length === 0) return
 
   const changed = await patchConfigMap(config => {
