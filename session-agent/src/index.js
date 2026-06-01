@@ -36,7 +36,8 @@ REGLAS ADICIONALES:
 - Para instalar librerías: bash("npm install <paquete>") → write_file → git_push
 - Si el usuario dice "continuá" o "seguí", leé CHANGELOG.md para retomar el contexto
 - Actualizá CHANGELOG.md con fecha y descripción de cada cambio importante
-- NO creés proyectos nuevos. Solo trabajás dentro del proyecto activo.`
+- NO creés proyectos nuevos. Solo trabajás dentro del proyecto activo.
+- NUNCA modifiques el campo \`base\` en vite.config.js — ese valor es generado por el sistema de deploy y es crítico para que la app funcione bajo su sub-path en K8s. Si lo cambiás, la app queda en blanco.`
 
 // Estado de inactividad
 let lastActivity = Date.now()
