@@ -517,6 +517,7 @@ export default function ProjectWorkspace() {
       const isText = /^text\/|json|javascript|typescript|css|html|xml|csv|markdown|yaml/.test(file.type)
         || /\.(txt|md|py|js|ts|jsx|tsx|css|html|json|csv|yaml|yml|sh|sql|env)$/i.test(file.name)
       const reader = new FileReader()
+      reader.onerror = () => resolve({ error: true, name: file.name })
       if (isText) {
         reader.onload = () => resolve({ name: file.name, type: file.type, size: file.size, textContent: reader.result, isImage: false })
         reader.readAsText(file)
@@ -526,7 +527,13 @@ export default function ProjectWorkspace() {
       }
     })
 
-    const results = await Promise.all(files.map(readFile))
+    const settled = await Promise.all(files.map(readFile))
+    const failed = settled.filter(r => r.error)
+    const results = settled.filter(r => !r.error)
+    if (failed.length) {
+      setAttachError(`No se pudieron leer: ${failed.map(f => f.name).join(', ')}`)
+    }
+    if (!results.length) return
     setAttachments(prev => {
       const combined = [...prev, ...results]
       const totalBytes = combined.reduce((s, a) => s + (a.size || 0), 0)
