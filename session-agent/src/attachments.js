@@ -6,7 +6,8 @@ const ATTACH_DIRNAME = '.attachments'
 
 // Solo el basename, sin separadores ni prefijos relativos
 function sanitizeName(name) {
-  const base = path.basename(String(name ?? '').trim())
+  const noControl = String(name ?? '').replace(/[\r\n\t\x00-\x1f]/g, '')
+  const base = path.basename(noControl.trim())
   const cleaned = base.replace(/[/\\]/g, '').replace(/^\.+/, '')
   return cleaned || 'archivo'
 }

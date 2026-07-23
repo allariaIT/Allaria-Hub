@@ -7,20 +7,41 @@ const LITELLM_TIMEOUT_MS = 3 * 60_000 // 3 min por llamada — si LiteLLM no res
 const VISIBLE_MIME = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'])
 
 export function buildUserContent(userMessage, attachments = []) {
-  if (!attachments.length) return userMessage
+  const atts = attachments ?? []
+  if (!atts.length) return userMessage
   const parts = []
   if (userMessage) parts.push({ type: 'text', text: userMessage })
-  for (const att of attachments) {
+  let hasVisible = false
+  for (const att of atts) {
     if (VISIBLE_MIME.has(att.mimeType) && att.base64) {
       parts.push({ type: 'image_url', image_url: { url: att.base64 } })
+      hasVisible = true
     }
   }
-  const list = attachments.map(a => `- ${a.path} (${a.mimeType || 'desconocido'})`).join('\n')
+  const list = atts.map(a => `- ${a.path} (${a.mimeType || 'desconocido'})`).join('\n')
+  const visibleLine = hasVisible
+    ? 'Las imágenes y PDFs ya están incluidos arriba para que los veas. '
+    : ''
   parts.push({
     type: 'text',
-    text: `Archivos adjuntos por el usuario, disponibles en el workspace:\n${list}\n\nLas imágenes y PDFs ya están incluidos arriba para que los veas. Para archivos de datos o texto (csv, json, txt, etc.) usá read_file con la ruta indicada. Estos archivos se commitean al repo cuando hagas git_push.`,
+    text: `Archivos adjuntos por el usuario, disponibles en el workspace:\n${list}\n\n${visibleLine}Para archivos de datos o texto (csv, json, txt, etc.) usá read_file con la ruta indicada. Estos archivos se commitean al repo cuando hagas git_push.`,
   })
   return parts
+}
+
+// Quita las partes image_url del mensaje de usuario. Devuelve nuevas copias
+// (no muta el original) y marca si sacó algo.
+export function stripImageParts(messages) {
+  let stripped = false
+  const out = messages.map(m => {
+    if (m.role === 'user' && Array.isArray(m.content)) {
+      const filtered = m.content.filter(p => p.type !== 'image_url')
+      if (filtered.length !== m.content.length) stripped = true
+      return { ...m, content: filtered.length ? filtered : '' }
+    }
+    return m
+  })
+  return { messages: out, stripped }
 }
 
 // Mantiene solo las últimas N rondas de tool calls para no explotar el contexto
@@ -73,7 +94,20 @@ export async function* runAgent(userMessage, history, systemPrompt, attachments 
   let autoContinues = 0
 
   while (rounds < MAX_ROUNDS) {
-    const data = await callLiteLLM(pruneToolRounds(messages))
+    let data
+    try {
+      data = await callLiteLLM(pruneToolRounds(messages))
+    } catch (err) {
+      const { messages: withoutImages, stripped } = stripImageParts(messages)
+      if (!stripped) throw err
+      // Un adjunto visual (imagen o PDF) no pudo procesarse. Reintentamos sin
+      // las partes image_url para no romper todo el mensaje; el archivo ya
+      // quedó materializado en .attachments/ y sigue en la nota de texto.
+      messages.length = 0
+      messages.push(...withoutImages)
+      yield { type: 'text', content: '\n\n⚠️ No pude procesar visualmente un adjunto (imagen o PDF). Sigo con el resto: el archivo quedó en `.attachments/` y puedo leerlo con read_file si es de texto.\n\n' }
+      data = await callLiteLLM(pruneToolRounds(messages))
+    }
     const choice = data.choices?.[0]
     if (!choice) throw new Error('Respuesta vacía de LiteLLM')
 

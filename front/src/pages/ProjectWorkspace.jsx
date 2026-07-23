@@ -490,7 +490,7 @@ export default function ProjectWorkspace() {
     }
   }
 
-  const handleFileSelect = (e) => {
+  const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files || [])
     e.target.value = ''
     if (!files.length) return
@@ -512,22 +512,29 @@ export default function ProjectWorkspace() {
       return
     }
 
-    files.forEach(file => {
+    const readFile = (file) => new Promise(resolve => {
       const isImage = file.type.startsWith('image/')
       const isText = /^text\/|json|javascript|typescript|css|html|xml|csv|markdown|yaml/.test(file.type)
         || /\.(txt|md|py|js|ts|jsx|tsx|css|html|json|csv|yaml|yml|sh|sql|env)$/i.test(file.name)
       const reader = new FileReader()
       if (isText) {
-        reader.onload = () => setAttachments(prev => [...prev, {
-          name: file.name, type: file.type, size: file.size, textContent: reader.result, isImage: false,
-        }])
+        reader.onload = () => resolve({ name: file.name, type: file.type, size: file.size, textContent: reader.result, isImage: false })
         reader.readAsText(file)
       } else {
-        reader.onload = () => setAttachments(prev => [...prev, {
-          name: file.name, type: file.type, size: file.size, base64: reader.result, isImage,
-        }])
+        reader.onload = () => resolve({ name: file.name, type: file.type, size: file.size, base64: reader.result, isImage })
         reader.readAsDataURL(file)
       }
+    })
+
+    const results = await Promise.all(files.map(readFile))
+    setAttachments(prev => {
+      const combined = [...prev, ...results]
+      const totalBytes = combined.reduce((s, a) => s + (a.size || 0), 0)
+      if (combined.length > MAX_FILES || totalBytes > MAX_TOTAL_BYTES) {
+        setAttachError(`Máximo ${MAX_FILES} archivos y 20 MB por mensaje.`)
+        return prev
+      }
+      return combined
     })
   }
 
