@@ -132,21 +132,25 @@ Front (archivos → base64 en estado)
 
 ## Constraint técnico
 
-El base64 viaja front → back → pod. Hay que **subir el límite de body** en el
-`express.json` del back y del pod para acomodar los adjuntos. Propuesta: ~25 MB
-(permite un par de imágenes + un CSV dentro del tope de 5×10 MB). Verificar el
-límite actual del back en `back/src/index.js` durante la implementación.
+El base64 viaja front → back → pod. El back ya tiene `express.json({ limit:
+'50mb' })` en `back/src/index.js` (no requiere cambio). El **pod** hoy tiene
+`10mb` en `session-agent/src/index.js` → subir a **30 MB**. Para no exceder el
+límite del back con la inflación de base64 (~1.37×), el front aplica un **tope
+total de 20 MB** de adjuntos por mensaje (20 MB crudos ≈ 27 MB base64 < 50 MB).
 
 ## Límites y constantes
 
 - Máx **5** archivos por mensaje.
 - Máx **10 MB** por archivo.
+- Máx **20 MB** en total por mensaje (suma de todos los adjuntos).
 - `accept` (front): mismo set que `Chat.jsx`
   (`image/*,audio/*,video/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css`).
 - MIME que van al LLM como imagen: `image/jpeg`, `image/png`, `image/gif`,
-  `image/webp`, `application/pdf`.
+  `image/webp`, `application/pdf`. (Caveat: el workspace usa `claude-sonnet-4-5`
+  fijo; si Claude vía LiteLLM rechaza un PDF, el pod devuelve el error al chat.
+  Los datos/texto no dependen del multimodal: se leen con `read_file`.)
 - Carpeta de materialización: `/workspace/.attachments/`.
-- Límite de body `express.json`: ~25 MB (back y pod).
+- Límite de body `express.json`: back ya `50mb`; pod `10mb` → `30mb`.
 
 ## Testing (TDD)
 
