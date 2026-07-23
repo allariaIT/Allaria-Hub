@@ -4,6 +4,7 @@ import { getToolsForConnectors, executeTool, CONFIRMABLE_TOOLS } from '../lib/to
 import { createSessionPod, waitForPodReady } from '../lib/k8s.js'
 import { pollGitlabPipeline } from '../lib/sandbox-tools.js'
 import { startStream, pushEvent, endStream } from '../lib/active-streams.js'
+import { attachmentsToRefs } from '../lib/attachments-refs.js'
 
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN
 
@@ -256,7 +257,7 @@ proxyRouter.post('/stream', async (req, res) => {
   }
 
   try {
-    const { chatId, model, messages, connectors = [], temperature = 0.7, max_tokens = 8192, projectId } = req.body
+    const { chatId, model, messages, connectors = [], temperature = 0.7, max_tokens = 8192, projectId, attachments = [] } = req.body
 
     if (!chatId || !messages?.length) {
       send({ type: 'error', message: 'chatId y messages son requeridos' })
@@ -269,13 +270,13 @@ proxyRouter.post('/stream', async (req, res) => {
     const lastUserMsg = messages[messages.length - 1]
     if (lastUserMsg.role === 'user') {
       await prisma.message.create({
-        data: { chatId, role: 'user', content: extractTextForDb(lastUserMsg.content) },
+        data: { chatId, role: 'user', content: extractTextForDb(lastUserMsg.content) + attachmentsToRefs(attachments) },
       })
     }
 
     // Branch workspace con session pod
     if (projectId) {
-      await handleWorkspaceStream(req, res, { chatId, messages, projectId, send, heartbeat })
+      await handleWorkspaceStream(req, res, { chatId, messages, projectId, attachments, send, heartbeat })
       return
     }
 
@@ -340,7 +341,7 @@ proxyRouter.post('/stream', async (req, res) => {
   }
 })
 
-async function handleWorkspaceStream(req, res, { chatId, messages, projectId, send: rawSend, heartbeat }) {
+async function handleWorkspaceStream(req, res, { chatId, messages, projectId, attachments = [], send: rawSend, heartbeat }) {
   // Inicializar buffer de stream activo para que clientes que se reconecten
   // puedan recuperar lo que se perdió
   startStream(chatId)
@@ -394,6 +395,7 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, se
       body: JSON.stringify({
         message: lastUserMsg.content,
         history: messages.slice(0, -1).slice(-6), // últimos 6 mensajes para no explotar el contexto
+        attachments,
       }),
       signal: AbortSignal.timeout(900_000), // 15 min — el agente puede tardar en tareas complejas
     })
