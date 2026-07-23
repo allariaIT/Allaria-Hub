@@ -4,6 +4,24 @@ const MODEL = 'claude-sonnet-4-5'
 const MAX_ROUNDS = 30
 const MAX_AUTO_CONTINUE = 3
 const LITELLM_TIMEOUT_MS = 3 * 60_000 // 3 min por llamada — si LiteLLM no responde, cortar
+const VISIBLE_MIME = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'])
+
+export function buildUserContent(userMessage, attachments = []) {
+  if (!attachments.length) return userMessage
+  const parts = []
+  if (userMessage) parts.push({ type: 'text', text: userMessage })
+  for (const att of attachments) {
+    if (VISIBLE_MIME.has(att.mimeType) && att.base64) {
+      parts.push({ type: 'image_url', image_url: { url: att.base64 } })
+    }
+  }
+  const list = attachments.map(a => `- ${a.path} (${a.mimeType || 'desconocido'})`).join('\n')
+  parts.push({
+    type: 'text',
+    text: `Archivos adjuntos por el usuario, disponibles en el workspace:\n${list}\n\nLas imágenes y PDFs ya están incluidos arriba para que los veas. Para archivos de datos o texto (csv, json, txt, etc.) usá read_file con la ruta indicada. Estos archivos se commitean al repo cuando hagas git_push.`,
+  })
+  return parts
+}
 
 // Mantiene solo las últimas N rondas de tool calls para no explotar el contexto
 function pruneToolRounds(messages, maxRounds = 6) {
@@ -44,11 +62,11 @@ async function callLiteLLM(messages) {
   return data
 }
 
-export async function* runAgent(userMessage, history, systemPrompt) {
+export async function* runAgent(userMessage, history, systemPrompt, attachments = []) {
   const messages = [
     { role: 'system', content: systemPrompt },
     ...history.map(m => ({ role: m.role, content: m.content })),
-    { role: 'user', content: userMessage },
+    { role: 'user', content: buildUserContent(userMessage, attachments) },
   ]
 
   let rounds = 0
