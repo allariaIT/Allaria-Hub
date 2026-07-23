@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ExternalLink, GitBranch, Pencil, Check, X,
   Send, Bot, User, Copy, CheckCheck, Loader2,
-  Globe, EyeOff, Zap,
+  Globe, EyeOff, Zap, Paperclip, FileText,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { api } from '../lib/api'
@@ -36,6 +36,11 @@ REGLAS ADICIONALES:
 
 const DEFAULT_MODEL = 'claude-sonnet-4-5'
 const CONNECTORS = ['workspaceSandbox']
+
+const MAX_FILES = 5
+const MAX_FILE_BYTES = 10 * 1024 * 1024
+const MAX_TOTAL_BYTES = 20 * 1024 * 1024
+const ATTACH_ACCEPT = 'image/*,audio/*,video/*,.pdf,.txt,.csv,.json,.md,.py,.js,.ts,.jsx,.tsx,.html,.css'
 
 const PIPELINE_STAGES = [
   { id: 'build',  emoji: '📦', label: 'Empaquetando tu app',  durationKey: 'build' },
@@ -83,6 +88,9 @@ export default function ProjectWorkspace() {
   const [descSaved, setDescSaved]       = useState(false)
 
   const [input, setInput]               = useState('')
+  const [attachments, setAttachments]   = useState([])
+  const [attachError, setAttachError]   = useState('')
+  const fileInputRef = useRef(null)
   const [selectedModel] = useState(DEFAULT_MODEL)
   const [sending, setSending]           = useState(false)
   const [activity, setActivity]         = useState(emptyActivity())
@@ -443,16 +451,17 @@ export default function ProjectWorkspace() {
   // ─────────────────────────────────────────────────────────────────────────
   const doSend = async (overrideInput) => {
     const text = (overrideInput ?? input).trim()
-    if (!text || !chat) return
+    const atts = overrideInput ? [] : attachments
+    if ((!text && !atts.length) || !chat) return
 
     setSending(true)
     setActivitySync(emptyActivity())
     setPipelineState(null)
 
-    const userMsg = { role: 'user', content: text }
+    const userMsg = { role: 'user', content: text, attachments: atts }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
-    if (!overrideInput) setInput('')
+    if (!overrideInput) { setInput(''); setAttachments([]); setAttachError('') }
 
     try {
       const systemMsg = { role: 'system', content: buildSystemPrompt() }
@@ -463,7 +472,11 @@ export default function ProjectWorkspace() {
           .map(m => ({ role: m.role, content: m.content })),
       ]
 
-      const response = await api.streamMessage(chat.id, selectedModel, apiMessages, CONNECTORS, project.id)
+      const payload = atts.map(a => ({
+        name: a.name, type: a.type, base64: a.base64, textContent: a.textContent,
+      }))
+
+      const response = await api.streamMessage(chat.id, selectedModel, apiMessages, CONNECTORS, project.id, payload)
       if (!response.ok) {
         const err = await response.json().catch(() => ({ error: 'Error del servidor' }))
         throw new Error(err.error || 'Error del servidor')
@@ -476,6 +489,49 @@ export default function ProjectWorkspace() {
       setSending(false)
     }
   }
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!files.length) return
+    setAttachError('')
+
+    const tooBig = files.filter(f => f.size > MAX_FILE_BYTES)
+    if (tooBig.length) {
+      setAttachError(`Cada archivo debe pesar menos de 10 MB: ${tooBig.map(f => f.name).join(', ')}`)
+      return
+    }
+    if (attachments.length + files.length > MAX_FILES) {
+      setAttachError(`Máximo ${MAX_FILES} archivos por mensaje.`)
+      return
+    }
+    const currentBytes = attachments.reduce((s, a) => s + (a.size || 0), 0)
+    const newBytes = files.reduce((s, f) => s + f.size, 0)
+    if (currentBytes + newBytes > MAX_TOTAL_BYTES) {
+      setAttachError('El total de adjuntos supera los 20 MB.')
+      return
+    }
+
+    files.forEach(file => {
+      const isImage = file.type.startsWith('image/')
+      const isText = /^text\/|json|javascript|typescript|css|html|xml|csv|markdown|yaml/.test(file.type)
+        || /\.(txt|md|py|js|ts|jsx|tsx|css|html|json|csv|yaml|yml|sh|sql|env)$/i.test(file.name)
+      const reader = new FileReader()
+      if (isText) {
+        reader.onload = () => setAttachments(prev => [...prev, {
+          name: file.name, type: file.type, size: file.size, textContent: reader.result, isImage: false,
+        }])
+        reader.readAsText(file)
+      } else {
+        reader.onload = () => setAttachments(prev => [...prev, {
+          name: file.name, type: file.type, size: file.size, base64: reader.result, isImage,
+        }])
+        reader.readAsDataURL(file)
+      }
+    })
+  }
+
+  const removeAttachment = (idx) => setAttachments(prev => prev.filter((_, i) => i !== idx))
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -676,6 +732,15 @@ export default function ProjectWorkspace() {
                   {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
                 </div>
                 <div className="pw-msg-body">
+                  {msg.role === 'user' && msg.attachments?.length > 0 && (
+                    <div className="pw-msg-attachments">
+                      {msg.attachments.map((a, j) => (
+                        a.isImage
+                          ? <img key={j} src={a.base64} alt={a.name} className="pw-attach-thumb" />
+                          : <span key={j} className="pw-attach-file"><FileText size={12} /> {a.name}</span>
+                      ))}
+                    </div>
+                  )}
                   {msg.role === 'assistant' ? (
                     <ReactMarkdown>{msg.content}</ReactMarkdown>
                   ) : (
@@ -711,10 +776,42 @@ export default function ProjectWorkspace() {
           </div>
 
           <div className="pw-input-area">
+            {attachError && <div className="pw-attach-error">{attachError}</div>}
+            {attachments.length > 0 && (
+              <div className="pw-attachments-preview">
+                {attachments.map((file, i) => (
+                  <div key={i} className="pw-attachment-chip">
+                    {file.isImage
+                      ? <img src={file.base64} alt={file.name} className="pw-attachment-thumb" />
+                      : <FileText size={14} />}
+                    <span className="pw-attachment-name">{file.name}</span>
+                    <button className="pw-attachment-remove" onClick={() => removeAttachment(i)}>
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <span className="pw-model-badge">
               <img src="https://www.google.com/s2/favicons?sz=64&domain=claude.ai" alt="Claude" />
               Claude Sonnet
             </span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={ATTACH_ACCEPT}
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
+            <button
+              className="pw-attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              title="Adjuntar archivo"
+            >
+              <Paperclip size={16} />
+            </button>
             <textarea
               ref={inputRef}
               value={input}
@@ -731,7 +828,7 @@ export default function ProjectWorkspace() {
             <button
               className="pw-send-btn"
               onClick={() => doSend()}
-              disabled={!input.trim() || sending}
+              disabled={(!input.trim() && !attachments.length) || sending}
             >
               <Send size={16} />
             </button>
