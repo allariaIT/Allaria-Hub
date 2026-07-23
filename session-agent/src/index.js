@@ -1,10 +1,11 @@
 import 'dotenv/config'
 import express from 'express'
 import { runAgent } from './agent.js'
+import { writeAttachments } from './attachments.js'
 import { gitClone, gitCommitAndPush } from './git.js'
 
 const app = express()
-app.use(express.json({ limit: '10mb' }))
+app.use(express.json({ limit: '30mb' }))
 
 const PORT = process.env.PORT || 3200
 const WORKSPACE = process.env.WORKSPACE_DIR || '/workspace'
@@ -37,7 +38,8 @@ REGLAS ADICIONALES:
 - Si el usuario dice "continuá" o "seguí", leé CHANGELOG.md para retomar el contexto
 - Actualizá CHANGELOG.md con fecha y descripción de cada cambio importante
 - NO creés proyectos nuevos. Solo trabajás dentro del proyecto activo.
-- NUNCA modifiques el campo \`base\` en vite.config.js — ese valor es generado por el sistema de deploy y es crítico para que la app funcione bajo su sub-path en K8s. Si lo cambiás, la app queda en blanco.`
+- NUNCA modifiques el campo \`base\` en vite.config.js — ese valor es generado por el sistema de deploy y es crítico para que la app funcione bajo su sub-path en K8s. Si lo cambiás, la app queda en blanco.
+- ADJUNTOS: si el usuario adjunta archivos, están en la carpeta .attachments/ del proyecto. Las imágenes y PDFs ya los ves directamente en el mensaje. Los archivos de datos/texto (csv, json, txt) los leés con read_file usando la ruta .attachments/<nombre>. Todo lo que quede en el workspace (incluida .attachments/) se commitea cuando hacés git_push.`
 
 // Estado de inactividad
 let lastActivity = Date.now()
@@ -57,9 +59,11 @@ app.get('/health', (req, res) => {
 
 // POST /chat → SSE stream
 app.post('/chat', async (req, res) => {
-  const { message, history = [] } = req.body
+  const { message, history = [], attachments = [] } = req.body
 
-  if (!message) return res.status(400).json({ error: 'message es requerido' })
+  if (!message && (!Array.isArray(attachments) || attachments.length === 0)) {
+    return res.status(400).json({ error: 'message o attachments es requerido' })
+  }
 
   lastActivity = Date.now()
 
@@ -80,8 +84,15 @@ app.post('/chat', async (req, res) => {
   try {
     send({ type: 'thinking' })
 
+    let written = []
+    try {
+      written = writeAttachments(attachments)
+    } catch (err) {
+      console.warn('[session-agent] error materializando adjuntos:', err.message)
+    }
+
     let fullText = ''
-    for await (const event of runAgent(message, history, SYSTEM_PROMPT)) {
+    for await (const event of runAgent(message, history, SYSTEM_PROMPT, written)) {
       send(event)
       if (event.type === 'text') fullText += event.content
     }
