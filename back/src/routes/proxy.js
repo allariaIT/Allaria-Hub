@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { getToolsForConnectors, executeTool, CONFIRMABLE_TOOLS } from '../lib/tools.js'
-import { createSessionPod, waitForPodReady } from '../lib/k8s.js'
+import { createSessionPod, waitForPodReady, WORKSPACE_MODEL } from '../lib/k8s.js'
 import { pollGitlabPipeline } from '../lib/sandbox-tools.js'
 import { startStream, pushEvent, endStream } from '../lib/active-streams.js'
 import { attachmentsToRefs } from '../lib/attachments-refs.js'
@@ -449,7 +449,7 @@ async function handleWorkspaceStream(req, res, { chatId, messages, projectId, at
 
     if (assistantContent) {
       await prisma.message.create({
-        data: { chatId, role: 'assistant', content: assistantContent, model: 'claude-sonnet-4-5' },
+        data: { chatId, role: 'assistant', content: assistantContent, model: WORKSPACE_MODEL },
       })
       await prisma.chat.update({ where: { id: chatId }, data: { updatedAt: new Date() } })
     }

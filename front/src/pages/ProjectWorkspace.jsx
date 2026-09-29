@@ -34,7 +34,7 @@ REGLAS ADICIONALES:
 - Actualizá CHANGELOG.md con fecha y descripción de cada cambio
 - NO creés proyectos nuevos desde acá`
 
-const DEFAULT_MODEL = 'claude-sonnet-4-5'
+const DEFAULT_MODEL = 'gemini-2.5-pro'
 const CONNECTORS = ['workspaceSandbox']
 
 const MAX_FILES = 5
@@ -807,8 +807,8 @@ export default function ProjectWorkspace() {
               </div>
             )}
             <span className="pw-model-badge">
-              <img src="https://www.google.com/s2/favicons?sz=64&domain=claude.ai" alt="Claude" />
-              Claude Sonnet
+              <img src="https://www.google.com/s2/favicons?sz=64&domain=gemini.google.com" alt="Gemini" />
+              Gemini 2.5 Pro
             </span>
             <input
               ref={fileInputRef}

@@ -2,6 +2,12 @@ import k8s from '@kubernetes/client-node'
 
 const NAMESPACE = 'sandbox-sessions'
 const IMAGE = 'swr.la-south-2.myhuaweicloud.com/sandbox-allaria/session-agent:latest'
+export const WORKSPACE_MODEL = process.env.WORKSPACE_MODEL || 'gemini-2.5-pro'
+
+function litellmBaseUrl(url) {
+  if (process.env.LITELLM_BASE_URL) return process.env.LITELLM_BASE_URL
+  return new URL(url).origin
+}
 
 function makeClient() {
   const kc = new k8s.KubeConfig()
@@ -39,8 +45,9 @@ export async function createSessionPod(sessionId, repoUrl, litellmUrl, litellmKe
             { name: 'SESSION_ID', value: sessionId },
             { name: 'BACK_URL', value: backUrl || 'http://back.allaria-hub.svc.cluster.local:3098' },
             { name: 'GIT_SSL_NO_VERIFY', value: '1' },
-            // SDK Anthropic necesita base URL sin path (agrega /v1/messages internamente)
-            { name: 'LITELLM_BASE_URL', value: 'http://172.30.200.101:4000' },
+            // El agente agrega /v1/chat/completions: pasamos solo el origin
+            { name: 'LITELLM_BASE_URL', value: litellmBaseUrl(litellmUrl || process.env.LITELLM_URL) },
+            { name: 'LITELLM_MODEL', value: WORKSPACE_MODEL },
           ],
           resources: {
             requests: { cpu: '10m', memory: '64Mi' },

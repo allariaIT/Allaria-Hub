@@ -18,8 +18,8 @@ const PROVIDERS = [
     color: '#4285F4',
     colorLight: 'rgba(66, 133, 244, 0.1)',
     models: [
-      { id: 'gemini/gemini-2.5-flash', label: 'Rápido', desc: 'Gemini 2.5 Flash' },
-      { id: 'gemini/gemini-2.5-pro', label: 'Pensar', desc: 'Gemini 2.5 Pro' },
+      { id: 'gemini-2.5-flash', label: 'Rápido', desc: 'Gemini 2.5 Flash' },
+      { id: 'gemini-2.5-pro', label: 'Pensar', desc: 'Gemini 2.5 Pro' },
     ],
   },
   {
@@ -28,17 +28,9 @@ const PROVIDERS = [
     color: '#10A37F',
     colorLight: 'rgba(16, 163, 127, 0.1)',
     models: [
-      { id: 'openai/gpt-4-turbo', label: 'Rápido', desc: 'GPT-4 Turbo' },
-      { id: 'openai/gpt-4o', label: 'Pensar', desc: 'GPT-4o' },
-    ],
-  },
-  {
-    name: 'Claude',
-    logo: 'https://www.google.com/s2/favicons?sz=64&domain=claude.ai',
-    color: '#D97757',
-    colorLight: 'rgba(217, 119, 87, 0.1)',
-    models: [
-      { id: 'claude-sonnet-4-5', label: 'Sonnet 4.5', desc: 'Claude Sonnet 4.5' },
+      { id: 'gpt-5.6-luna', label: 'Rápido', desc: 'GPT-5.6 Luna' },
+      { id: 'gpt-5.6-terra', label: 'Equilibrado', desc: 'GPT-5.6 Terra' },
+      { id: 'gpt-5.6-sol', label: 'Pensar', desc: 'GPT-5.6 Sol' },
     ],
   },
 ]
@@ -230,13 +222,13 @@ export default function Chat() {
     )
   }
 
-  const GEMINI_FLASH = 'gemini/gemini-2.5-flash'
+  const GEMINI_FLASH = 'gemini-2.5-flash'
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files)
 
     // Switch to Gemini if not already
-    if (selectedModel !== GEMINI_FLASH && selectedModel !== 'gemini/gemini-2.5-pro') {
+    if (selectedModel !== GEMINI_FLASH && selectedModel !== 'gemini-2.5-pro') {
       setSelectedModel(GEMINI_FLASH)
       showToast('📎 Se cambió a Gemini — es el mejor modelo para analizar archivos adjuntos')
     }

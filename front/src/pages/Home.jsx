@@ -79,7 +79,7 @@ export default function Home() {
               <MessageSquare size={24} />
             </div>
             <h3>Chat IA</h3>
-            <p>Consultá al asistente impulsado por Gemini, ChatGPT y Claude para resolver dudas técnicas, generar código o analizar datos.</p>
+            <p>Consultá al asistente impulsado por Gemini y ChatGPT para resolver dudas técnicas, generar código o analizar datos.</p>
             <span className="qa-link">
               Abrir chat <ArrowRight size={14} />
             </span>

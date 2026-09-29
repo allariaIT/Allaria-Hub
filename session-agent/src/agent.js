@@ -1,6 +1,6 @@
 import { toolDefinitions, executeTool } from './tools.js'
 
-const MODEL = 'claude-sonnet-4-5'
+const MODEL = process.env.LITELLM_MODEL || 'gemini-2.5-pro'
 const MAX_ROUNDS = 30
 const MAX_AUTO_CONTINUE = 3
 const LITELLM_TIMEOUT_MS = 3 * 60_000 // 3 min por llamada — si LiteLLM no responde, cortar
