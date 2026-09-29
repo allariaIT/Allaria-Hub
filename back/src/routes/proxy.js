@@ -10,10 +10,10 @@ const GITLAB_TOKEN = process.env.GITLAB_TOKEN
 
 function repoUrlWithAuth(url) {
   if (!url || !GITLAB_TOKEN) return url
-  // Usar IP directa + HTTP para evitar ELB→nginx que no tiene vhost de GitLab
+  // GitLab se migró fuera de .101 (2026-09-23): clonar por el dominio (el pod tiene GIT_SSL_NO_VERIFY)
   const path = url.replace(/https?:\/\/gitlab\.allaria\.xyz/, '')
   const base = path.endsWith('.git') ? path : path + '.git'
-  return `http://oauth2:${GITLAB_TOKEN}@172.30.200.101${base}`
+  return `https://oauth2:${GITLAB_TOKEN}@gitlab.allaria.xyz${base}`
 }
 
 async function getOrCreateSession(userId, projectId) {
