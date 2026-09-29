@@ -34,6 +34,9 @@ export async function createSessionPod(sessionId, repoUrl, litellmUrl, litellmKe
       restartPolicy: 'Never',
       terminationGracePeriodSeconds: 30,
       imagePullSecrets: [{ name: 'swr-pull-secret' }],
+      // El DNS del cluster resuelve gitlab.allaria.xyz a la IP pública (404 para GitLab);
+      // forzamos el ELB privado como hace el DNS corporativo
+      hostAliases: [{ ip: process.env.GITLAB_PRIVATE_IP || '172.30.200.105', hostnames: ['gitlab.allaria.xyz'] }],
       containers: [
         {
           name: 'agent',
